@@ -1,0 +1,160 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using HRMS.API.DTOs;
+using HRMS.API.Models;
+using HRMS.API.Repositories;
+
+namespace HRMS.API.Controllers
+{
+    [ApiController]
+    [Route("api/admin/[controller]")]
+    [AllowAnonymous]
+    public class SeedController : ControllerBase
+    {
+        private readonly ICostCentreRepository _costCentreRepo;
+        private readonly IMrfTemplateRepository _mrfTemplateRepo;
+        private readonly IDoAEntryRepository _doaRepo;
+
+        public SeedController(
+            ICostCentreRepository costCentreRepo,
+            IMrfTemplateRepository mrfTemplateRepo,
+            IDoAEntryRepository doaRepo)
+        {
+            _costCentreRepo = costCentreRepo;
+            _mrfTemplateRepo = mrfTemplateRepo;
+            _doaRepo = doaRepo;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SeedDatabase()
+        {
+            try
+            {
+                // Clear existing cost centres
+                var existingCostCentres = await _costCentreRepo.GetAllAsync();
+                foreach (var cc in existingCostCentres)
+                {
+                    await _costCentreRepo.DeleteAsync(cc.Id!);
+                }
+
+                // Clear existing templates
+                var existingTemplates = await _mrfTemplateRepo.GetAllAsync();
+                foreach (var t in existingTemplates)
+                {
+                    await _mrfTemplateRepo.DeleteAsync(t.Id!);
+                }
+
+                // Clear existing DoA
+                var existingDoa = await _doaRepo.GetAllAsync();
+                foreach (var d in existingDoa)
+                {
+                    await _doaRepo.DeleteAsync(d.Id!);
+                }
+
+                // 1. Seed Cost Centres
+                var costCentres = new List<CostCentre>
+                {
+                    new() { Code = "CC-001", Name = "Engineering", Department = "Technology", IsActive = true },
+                    new() { Code = "CC-002", Name = "Marketing", Department = "Growth", IsActive = true },
+                    new() { Code = "CC-003", Name = "Operations", Department = "Operations", IsActive = true },
+                    new() { Code = "CC-004", Name = "Finance", Department = "Finance", IsActive = true },
+                    new() { Code = "CC-005", Name = "Human Resources", Department = "People", IsActive = true }
+                };
+
+                foreach (var cc in costCentres)
+                {
+                    await _costCentreRepo.CreateAsync(cc);
+                }
+
+                // 2. Seed MRF Templates
+                var templates = new List<MrfTemplate>
+                {
+                    new()
+                    {
+                        CostCentre = "CC-001",
+                        Name = "Software Engineer Template",
+                        JobTitle = "Software Engineer",
+                        JdSkeleton = "We are looking for a Software Engineer to join our team. Responsibilities include designing, developing, and maintaining software systems. You will work with cross-functional teams to deliver high-quality products.",
+                        RequiredSkills = new List<string> { "JavaScript", "React", "Node.js", "REST APIs", "Git" },
+                        SalaryRange = new TemplateSalaryRange { Min = 600000, Max = 1200000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-001",
+                        Name = "Senior Software Engineer Template",
+                        JobTitle = "Senior Software Engineer",
+                        JdSkeleton = "We are looking for a Senior Software Engineer with 5+ years of experience. You will lead technical design, mentor junior engineers, and own complex features end-to-end.",
+                        RequiredSkills = new List<string> { "System Design", "JavaScript", "React", "C#", "MongoDB", "AWS" },
+                        SalaryRange = new TemplateSalaryRange { Min = 1200000, Max = 2200000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-002",
+                        Name = "Marketing Manager Template",
+                        JobTitle = "Marketing Manager",
+                        JdSkeleton = "We are looking for a Marketing Manager to lead our marketing initiatives. Responsibilities include campaign strategy, execution, performance tracking, and team management.",
+                        RequiredSkills = new List<string> { "Digital Marketing", "SEO/SEM", "Analytics", "Content Strategy", "Team Leadership" },
+                        SalaryRange = new TemplateSalaryRange { Min = 800000, Max = 1500000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-003",
+                        Name = "Operations Analyst Template",
+                        JobTitle = "Operations Analyst",
+                        JdSkeleton = "We are looking for an Operations Analyst to streamline business processes, analyse operational data, and support cross-functional projects.",
+                        RequiredSkills = new List<string> { "Process Analysis", "Excel", "Data Analysis", "Project Management", "Reporting" },
+                        SalaryRange = new TemplateSalaryRange { Min = 500000, Max = 900000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-005",
+                        Name = "HR Business Partner Template",
+                        JobTitle = "HR Business Partner",
+                        JdSkeleton = "We are looking for an HRBP to act as a strategic partner to business leaders. Responsibilities include talent management, employee relations, performance management, and HR policy implementation.",
+                        RequiredSkills = new List<string> { "Employee Relations", "Talent Management", "HRMS Tools", "Labour Law", "Communication" },
+                        SalaryRange = new TemplateSalaryRange { Min = 700000, Max = 1300000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    }
+                };
+
+                foreach (var t in templates)
+                {
+                    await _mrfTemplateRepo.CreateAsync(t);
+                }
+
+                // 3. Seed DoA List
+                var doaEntries = new List<DoAEntry>
+                {
+                    new() { Name = "Priya Sharma", Email = "priya.sharma@hrms.dev", Title = "VP Engineering", IsActive = true },
+                    new() { Name = "Rahul Mehta", Email = "rahul.mehta@hrms.dev", Title = "Director Operations", IsActive = true },
+                    new() { Name = "Sunita Patel", Email = "sunita.patel@hrms.dev", Title = "CFO", IsActive = true },
+                    new() { Name = "Arjun Nair", Email = "arjun.nair@hrms.dev", Title = "CHRO", IsActive = true },
+                    new() { Name = "Deepa Krishnan", Email = "deepa.krishnan@hrms.dev", Title = "VP Marketing", IsActive = true }
+                };
+
+                foreach (var d in doaEntries)
+                {
+                    await _doaRepo.CreateAsync(d);
+                }
+
+                return Ok(ApiResponse<string>.Ok("Database seeded successfully with Cost Centres, MRF Templates, and DoA list."));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<string>.Fail($"Seeding failed: {ex.Message}"));
+            }
+        }
+    }
+}
