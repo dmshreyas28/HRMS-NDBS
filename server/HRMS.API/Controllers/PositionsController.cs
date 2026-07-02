@@ -7,41 +7,34 @@ using Microsoft.AspNetCore.Mvc;
 using HRMS.API.DTOs;
 using HRMS.API.Models;
 using HRMS.API.Services;
+using HRMS.API.Repositories;
 
 namespace HRMS.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class PositionsController : ControllerBase
+    public class PositionsController : BaseController
     {
         private readonly IPositionService _positionService;
+        private readonly IUserRepository _userRepo;
 
-        public PositionsController(IPositionService positionService)
+        public PositionsController(IPositionService positionService, IUserRepository userRepo)
         {
             _positionService = positionService;
-        }
-
-        private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-            ?? throw new UnauthorizedAccessException("User identifier missing from request token.");
-
-        private UserRole CurrentUserRole
-        {
-            get
-            {
-                var roleStr = User.FindFirst("https://hrms.app/roles")?.Value ?? "undefined";
-                if (roleStr.Equals("admin", StringComparison.OrdinalIgnoreCase))
-                    return UserRole.Admin;
-                if (roleStr.Equals("hr_ta", StringComparison.OrdinalIgnoreCase) || roleStr.Equals("hr/ta", StringComparison.OrdinalIgnoreCase))
-                    return UserRole.HR_TA;
-                return UserRole.HM;
-            }
+            _userRepo = userRepo;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] string? status)
         {
-            var positions = await _positionService.GetAllAsync(CurrentUserId, CurrentUserRole);
+            PositionStatus? statusFilter = null;
+            if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<PositionStatus>(status, true, out var parsed))
+            {
+                statusFilter = parsed;
+            }
+
+            var positions = await _positionService.GetAllAsync(await GetCurrentMongoUserIdAsync(_userRepo), CurrentUserRole, statusFilter);
             return Ok(ApiResponse<List<Position>>.Ok(positions));
         }
 
@@ -56,14 +49,14 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOnly")]
         public async Task<IActionResult> Create([FromBody] CreatePositionRequest request)
         {
-            var position = await _positionService.CreatePositionAsync(request, CurrentUserId);
+            var position = await _positionService.CreatePositionAsync(request, await GetCurrentMongoUserIdAsync(_userRepo));
             return CreatedAtAction(nameof(GetById), new { id = position.Id }, ApiResponse<Position>.Ok(position));
         }
 
         [HttpPatch("{id}")]
         public async Task<IActionResult> Update(string id, [FromBody] UpdatePositionRequest request)
         {
-            var position = await _positionService.UpdatePositionAsync(id, request, CurrentUserId);
+            var position = await _positionService.UpdatePositionAsync(id, request, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -71,7 +64,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOnly")]
         public async Task<IActionResult> Submit(string id, [FromBody] SubmitPositionRequest request)
         {
-            var position = await _positionService.SubmitForApprovalAsync(id, request, CurrentUserId);
+            var position = await _positionService.SubmitForApprovalAsync(id, request, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -79,7 +72,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOrTA")]
         public async Task<IActionResult> Approve(string id, [FromBody] ApprovePositionRequest request)
         {
-            var position = await _positionService.ApprovePositionAsync(id, request.Notes, CurrentUserId);
+            var position = await _positionService.ApprovePositionAsync(id, request.Notes, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -87,7 +80,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOrTA")]
         public async Task<IActionResult> Reject(string id, [FromBody] RejectPositionRequest request)
         {
-            var position = await _positionService.RejectPositionAsync(id, request.Reason, CurrentUserId);
+            var position = await _positionService.RejectPositionAsync(id, request.Reason, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -95,7 +88,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOnly")]
         public async Task<IActionResult> Hold(string id, [FromBody] HoldPositionRequest request)
         {
-            var position = await _positionService.PlaceOnHoldAsync(id, request.DurationDays, CurrentUserId);
+            var position = await _positionService.PlaceOnHoldAsync(id, request.DurationDays, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -103,7 +96,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "HMOnly")]
         public async Task<IActionResult> ReleaseHold(string id)
         {
-            var position = await _positionService.ReleaseHoldAsync(id, CurrentUserId);
+            var position = await _positionService.ReleaseHoldAsync(id, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
@@ -111,7 +104,7 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "TAOnly")]
         public async Task<IActionResult> PostJob(string id)
         {
-            var position = await _positionService.PostJobAsync(id, CurrentUserId);
+            var position = await _positionService.PostJobAsync(id, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Position>.Ok(position));
         }
 

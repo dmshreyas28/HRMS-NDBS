@@ -9,23 +9,23 @@ using Microsoft.AspNetCore.Mvc;
 using HRMS.API.DTOs;
 using HRMS.API.Models;
 using HRMS.API.Services;
+using HRMS.API.Repositories;
 
 namespace HRMS.API.Controllers
 {
     [ApiController]
     [Route("api/positions/{positionId}/[controller]")]
     [Authorize]
-    public class CandidatesController : ControllerBase
+    public class CandidatesController : BaseController
     {
         private readonly ICandidateService _candidateService;
+        private readonly IUserRepository _userRepo;
 
-        public CandidatesController(ICandidateService candidateService)
+        public CandidatesController(ICandidateService candidateService, IUserRepository userRepo)
         {
             _candidateService = candidateService;
+            _userRepo = userRepo;
         }
-
-        private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-            ?? throw new UnauthorizedAccessException("User identifier missing.");
 
         [HttpGet]
         public async Task<IActionResult> GetCandidates(string positionId)
@@ -58,7 +58,7 @@ namespace HRMS.API.Controllers
         [HttpPatch("{id}/stage")]
         public async Task<IActionResult> TransitionStage(string positionId, string id, [FromBody] UpdateCandidateStageRequest request)
         {
-            var candidate = await _candidateService.TransitionStageAsync(id, request, CurrentUserId);
+            var candidate = await _candidateService.TransitionStageAsync(id, request, await GetCurrentMongoUserIdAsync(_userRepo));
             return Ok(ApiResponse<Candidate>.Ok(candidate));
         }
 
