@@ -149,6 +149,16 @@ export function RaiseFormPage() {
         const d = new Date(form.requiredStartDate);
         if (d.getTime() < Date.now() - 86_400_000) e.requiredStartDate = "Start date must be in the future.";
       }
+      if (position?.positionType === "REPLACEMENT") {
+        req("exEmployeeName", "Ex-employee name");
+        req("exEmployeeId", "Ex-employee ID");
+        req("exEmployeeEmail", "Ex-employee email");
+        req("exEmployeePhone", "Ex-employee phone number");
+        req("bu", "Business unit (BU)");
+        req("department", "Department");
+        req("lastSalary", "Last salary");
+        req("colourCode", "Departure color code");
+      }
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -274,28 +284,28 @@ export function RaiseFormPage() {
               Replacement Personnel Details
             </h2>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label="Ex-Employee Name">
+              <FormField label="Ex-Employee Name" required error={errors.exEmployeeName}>
                 <input value={form.exEmployeeName} onChange={(e) => set("exEmployeeName", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Ex-Employee ID">
+              <FormField label="Ex-Employee ID" required error={errors.exEmployeeId}>
                 <input value={form.exEmployeeId} onChange={(e) => set("exEmployeeId", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Ex-Employee Email">
+              <FormField label="Ex-Employee Email" required error={errors.exEmployeeEmail}>
                 <input value={form.exEmployeeEmail} onChange={(e) => set("exEmployeeEmail", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Ex-Employee Phone">
+              <FormField label="Ex-Employee Phone" required error={errors.exEmployeePhone}>
                 <input value={form.exEmployeePhone} onChange={(e) => set("exEmployeePhone", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Business Unit (BU)">
+              <FormField label="Business Unit (BU)" required error={errors.bu}>
                 <input value={form.bu} onChange={(e) => set("bu", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Department">
+              <FormField label="Department" required error={errors.department}>
                 <input value={form.department} onChange={(e) => set("department", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Last Salary (INR)">
+              <FormField label="Last Salary (INR)" required error={errors.lastSalary}>
                 <input type="number" value={form.lastSalary} onChange={(e) => set("lastSalary", e.target.value)} disabled={!isDraft} className={inputClass} />
               </FormField>
-              <FormField label="Colour Code">
+              <FormField label="Colour Code" required error={errors.colourCode}>
                 <select value={form.colourCode} onChange={(e) => set("colourCode", e.target.value)} disabled={!isDraft} className={inputClass}>
                   <option value="">Select…</option>
                   <option value="GREEN">GREEN — Voluntary / Good Standing</option>

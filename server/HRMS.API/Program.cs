@@ -11,6 +11,8 @@ using HRMS.API.Repositories;
 using HRMS.API.Services;
 using HRMS.API.Middleware;
 using HRMS.API.Jobs;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -73,6 +75,10 @@ builder.Services.AddControllers()
         opts.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         opts.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
+
+// Register FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<HRMS.API.Validators.CreatePositionRequestValidator>();
 
 // Register Exception Handler
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

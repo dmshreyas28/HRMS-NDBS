@@ -18,9 +18,34 @@ import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminTemplatesPage } from "./pages/admin/AdminTemplatesPage";
 import { AdminCostCentresPage } from "./pages/admin/AdminCostCentresPage";
 import { AdminDoaPage } from "./pages/admin/AdminDoaPage";
+import { AdminPositionsPage } from "./pages/admin/AdminPositionsPage";
 import "./App.css";
 
 const queryClient = new QueryClient();
+
+const DEMO_PROFILES = [
+  {
+    roleName: "Hiring Manager",
+    email: "hm@example.com",
+    description: "Raise headcounts, track approvals, and manage resignation replacement decisions.",
+    role: "HM",
+    badgeBg: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  },
+  {
+    roleName: "HR/TA Recruiter",
+    email: "ta@example.com",
+    description: "Publish vacancies, overview approved requisitions, and track candidate pipeline.",
+    role: "HR_TA",
+    badgeBg: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  },
+  {
+    roleName: "System Administrator",
+    email: "admin@example.com",
+    description: "Configure system templates, cost centres, user directory, and Delegation of Authority.",
+    role: "Admin",
+    badgeBg: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  },
+];
 
 function AuthGate() {
   const { isAuthenticated, isLoading, loginWithRedirect, getAccessTokenSilently } = useAuth0();
@@ -37,17 +62,46 @@ function AuthGate() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 text-white">
-        <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-tr from-indigo-400 to-violet-300">
-          HRMS Talent Acquisition
-        </h1>
-        <p className="text-slate-400 text-sm">Welcome back. Log in to access your recruitment pipeline.</p>
-        <button
-          onClick={() => loginWithRedirect()}
-          className="rounded-lg bg-indigo-600 px-6 py-2.5 font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all mt-4"
-        >
-          Sign In
-        </button>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-12 text-white">
+        <div className="w-full max-w-2xl text-center space-y-4 mb-8">
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-indigo-300">
+            HRMS Talent Acquisition
+          </h1>
+          <p className="text-slate-400 text-sm max-w-md mx-auto">
+            Choose a profile below to pre-fill your Auth0 login details, or sign in manually.
+          </p>
+        </div>
+
+        <div className="grid w-full max-w-2xl gap-4 grid-cols-1 md:grid-cols-3 mb-8">
+          {DEMO_PROFILES.map((p) => (
+            <button
+              key={p.role}
+              onClick={() => loginWithRedirect({ authorizationParams: { login_hint: p.email } })}
+              className="flex flex-col text-left rounded-xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-all duration-200 group shadow-lg hover:shadow-indigo-500/5 cursor-pointer"
+            >
+              <div className="flex items-center justify-between gap-2 mb-2 w-full">
+                <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${p.badgeBg}`}>
+                  {p.roleName}
+                </span>
+              </div>
+              <p className="font-mono text-xs font-semibold text-slate-300 group-hover:text-indigo-300 transition-colors mb-2">
+                {p.email}
+              </p>
+              <p className="text-slate-400 text-[11px] leading-relaxed mt-auto">
+                {p.description}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-4 w-full max-w-md justify-center border-t border-slate-800/80 pt-6">
+          <button
+            onClick={() => loginWithRedirect()}
+            className="rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 px-6 py-2.5 text-xs font-bold text-slate-300 transition-all hover:border-slate-700"
+          >
+            Sign In Manually
+          </button>
+        </div>
       </div>
     );
   }
@@ -118,6 +172,14 @@ function AuthGate() {
         element={
           <RequireRole roles={["Admin"]}>
             <AdminDoaPage />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/admin/positions"
+        element={
+          <RequireRole roles={["Admin"]}>
+            <AdminPositionsPage />
           </RequireRole>
         }
       />
