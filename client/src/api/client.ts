@@ -18,6 +18,16 @@ export class ApiError extends Error {
   }
 }
 
+async function getTokenWithTimeout(timeoutMs = 8000): Promise<string> {
+  if (!tokenGetter) throw new ApiError(401, "Not authenticated.");
+  return Promise.race([
+    tokenGetter(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new ApiError(408, "Authentication timed out. Please refresh and log in again.")), timeoutMs)
+    ),
+  ]);
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   
@@ -27,7 +37,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   if (tokenGetter) {
-    const token = await tokenGetter();
+    const token = await getTokenWithTimeout();
     headers.set("Authorization", `Bearer ${token}`);
   }
   

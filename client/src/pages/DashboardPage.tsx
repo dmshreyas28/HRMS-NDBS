@@ -52,12 +52,12 @@ function HmDashboard() {
   const [simDept, setSimDept] = useState("Engineering");
   const [simSalary, setSimSalary] = useState("1200000");
 
-  const { data: dashboard, isLoading: dashLoading } = useQuery({
+  const { data: dashboard, isLoading: dashLoading, isError: dashError, error: dashErr, refetch: refetchDash } = useQuery({
     queryKey: ["hm-dashboard"],
     queryFn: getHmDashboard,
   });
 
-  const { data: resignations, isLoading: resignLoading } = useQuery({
+  const { data: resignations, isLoading: resignLoading, isError: resignError, error: resignErr, refetch: refetchResign } = useQuery({
     queryKey: ["resignations"],
     queryFn: listResignations,
   });
@@ -150,6 +150,22 @@ function HmDashboard() {
   };
 
   const pendingResignationsList = resignations?.filter((r) => r.status === "PENDING_ACTION") ?? [];
+
+  if (dashError || resignError) {
+    const errMsg = (dashErr as Error)?.message || (resignErr as Error)?.message || "Unknown error";
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto py-16 text-center space-y-4">
+          <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
+          <p className="text-sm text-slate-500">{errMsg}</p>
+          <div className="flex justify-center gap-3">
+            <button onClick={() => { refetchDash(); refetchResign(); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
+            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (dashLoading || resignLoading) {
     return (
@@ -371,10 +387,25 @@ function HmDashboard() {
 // ----------------- TALENT ACQUISITION (HR) DASHBOARD -----------------
 function TaDashboard() {
   const navigate = useNavigate();
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, isError, error: taErr, refetch } = useQuery({
     queryKey: ["ta-dashboard"],
     queryFn: getTaDashboard,
   });
+
+  if (isError) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto py-16 text-center space-y-4">
+          <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
+          <p className="text-sm text-slate-500">{(taErr as Error)?.message || "Unknown error"}</p>
+          <div className="flex justify-center gap-3">
+            <button onClick={() => refetch()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
+            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -445,7 +476,7 @@ function TaDashboard() {
 function AdminDashboard() {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, isError, error: adminErr, refetch } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: getAdminDashboard,
   });
@@ -462,6 +493,21 @@ function AdminDashboard() {
       setSeeding(false);
     }
   };
+
+  if (isError) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto py-16 text-center space-y-4">
+          <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
+          <p className="text-sm text-slate-500">{(adminErr as Error)?.message || "Unknown error"}</p>
+          <div className="flex justify-center gap-3">
+            <button onClick={() => refetch()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
+            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (isLoading) {
     return (
