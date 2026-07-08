@@ -76,7 +76,7 @@ function AuthGate() {
           {DEMO_PROFILES.map((p) => (
             <button
               key={p.role}
-              onClick={() => loginWithRedirect({ authorizationParams: { login_hint: p.email } })}
+              onClick={() => loginWithRedirect({ authorizationParams: { login_hint: p.email, prompt: "login" } })}
               className="flex flex-col text-left rounded-xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-all duration-200 group shadow-lg hover:shadow-indigo-500/5 cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-2 w-full">
