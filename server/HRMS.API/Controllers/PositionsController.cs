@@ -108,6 +108,23 @@ namespace HRMS.API.Controllers
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
+        [HttpPatch("{id}/reviewer-email")]
+        [Authorize(Policy = "TAOnly")]
+        public async Task<IActionResult> UpdateReviewerEmail(string id, [FromBody] UpdateReviewerEmailRequest request)
+        {
+            await _positionService.UpdateReviewerEmailDraftAsync(id, request.Draft, await GetCurrentMongoUserIdAsync(_userRepo));
+            var position = await _positionService.GetByIdAsync(id);
+            return Ok(ApiResponse<Position>.Ok(position));
+        }
+
+        [HttpPost("{id}/reviewer-email/send")]
+        [Authorize(Policy = "TAOnly")]
+        public async Task<IActionResult> SendReviewerEmail(string id)
+        {
+            await _positionService.SendReviewerEmailAsync(id, await GetCurrentMongoUserIdAsync(_userRepo));
+            return Ok(ApiResponse<object>.Ok(new { sent = true }));
+        }
+
         [HttpGet("{id}/audit")]
         public async Task<IActionResult> GetAuditTrail(string id)
         {

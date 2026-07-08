@@ -26,6 +26,8 @@ export interface Position {
   jobPostedAt: string | null; filledAt: string | null; collapsedAt: string | null;
   lastHMActionAt: string; auditLog: AuditLogEntry[]; createdAt: string; updatedAt: string;
   replacementDetails?: ReplacementDetails;
+  reviewerEmailDraft?: string;
+  reviewerEmailSent?: boolean;
 }
 
 export interface MrfTemplate {

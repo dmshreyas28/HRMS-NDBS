@@ -21,6 +21,8 @@ namespace HRMS.API.Services
         Task<Position> ReleaseHoldAsync(string id, string actorUserId);
         Task<Position> PostJobAsync(string id, string actorUserId);
         Task<Position> AutoClosePositionAsync(string id, string actorUserId);
+        Task UpdateReviewerEmailDraftAsync(string id, string draft, string actorUserId);
+        Task SendReviewerEmailAsync(string id, string actorUserId);
     }
 
     public class PositionService : IPositionService
@@ -239,8 +241,15 @@ namespace HRMS.API.Services
                     Notes = "Submitted for review and approval."
                 });
 
+                string reviewerName = "Reviewer";
+                string raisedByName = "Hiring Manager";
                 if (!string.IsNullOrEmpty(request.ReviewerId))
                 {
+                    var reviewer = await _userRepo.GetByIdAsync(request.ReviewerId);
+                    if (reviewer != null)
+                    {
+                        reviewerName = reviewer.Name;
+                    }
                     await _notificationService.SendNotificationAsync(
                         request.ReviewerId,
                         NotificationType.APPROVAL_REMINDER,
@@ -248,6 +257,15 @@ namespace HRMS.API.Services
                         $"You have a pending approval request for '{position.JobTitle}' position."
                     );
                 }
+
+                var raisedBy = await _userRepo.GetByIdAsync(position.RaisedBy);
+                if (raisedBy != null)
+                {
+                    raisedByName = raisedBy.Name;
+                }
+
+                position.ReviewerEmailDraft = BuildReviewerEmailDraft(position, reviewerName, raisedByName);
+                position.ReviewerEmailSent = false;
             }
 
             await _positionRepo.UpdateAsync(id, position);
@@ -453,5 +471,80 @@ namespace HRMS.API.Services
             }
             return $"POS-{costCentre}-{new string(code)}";
         }
+
+        public async Task UpdateReviewerEmailDraftAsync(string id, string draft, string actorUserId)
+        {
+            var position = await GetByIdAsync(id);
+            var user = await _userRepo.GetByIdAsync(actorUserId);
+            
+            position.ReviewerEmailDraft = draft;
+            position.UpdatedAt = DateTime.UtcNow;
+            position.LastHMActionAt = DateTime.UtcNow;
+
+            position.AuditLog.Add(new AuditLogEntry
+            {
+                Action = "Update Reviewer Email Draft",
+                ActorId = actorUserId,
+                Timestamp = DateTime.UtcNow,
+                FromStatus = position.Status.ToString(),
+                ToStatus = position.Status.ToString(),
+                Notes = $"{user?.Name ?? "HR/TA"} edited the reviewer email draft."
+            });
+
+            await _positionRepo.UpdateAsync(id, position);
+        }
+
+        public async Task SendReviewerEmailAsync(string id, string actorUserId)
+        {
+            var position = await GetByIdAsync(id);
+            if (string.IsNullOrEmpty(position.ReviewerEmailDraft))
+                throw new InvalidOperationException("No email draft to send.");
+
+            var reviewer = await _userRepo.GetByIdAsync(position.ReviewerId!);
+            var email = reviewer?.Email ?? "reviewer@example.com";
+            var name = reviewer?.Name ?? "Reviewer";
+
+            await _notificationService.SendNotificationAsync(
+                position.ReviewerId!,
+                NotificationType.APPROVAL_REMINDER,
+                position.Id!,
+                position.ReviewerEmailDraft,
+                NotificationChannel.EMAIL
+            );
+
+            position.ReviewerEmailSent = true;
+            position.UpdatedAt = DateTime.UtcNow;
+            position.LastHMActionAt = DateTime.UtcNow;
+
+            position.AuditLog.Add(new AuditLogEntry
+            {
+                Action = "Send Reviewer Email",
+                ActorId = actorUserId,
+                Timestamp = DateTime.UtcNow,
+                FromStatus = position.Status.ToString(),
+                ToStatus = position.Status.ToString(),
+                Notes = "Reviewer email sent."
+            });
+
+            await _positionRepo.UpdateAsync(id, position);
+        }
+
+        private static string BuildReviewerEmailDraft(Position p, string reviewerName, string raisedByName) =>
+            $@"Hi {reviewerName},
+
+A new Manpower Requisition Form has been submitted and requires your approval.
+
+  Position:    {p.JobTitle}
+  Cost centre: {p.CostCentre}
+  Type:        {p.PositionType}
+  Raised by:   {raisedByName}
+
+Job summary:
+{p.Jd}
+
+Click here to review and approve/reject:
+http://localhost:5173/positions/{p.Id}
+
+— HRMS Talent Acquisition";
     }
 }
