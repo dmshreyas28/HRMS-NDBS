@@ -6,8 +6,26 @@ import { useAuthStore } from "../store/authStore";
 import { getHmDashboard, getTaDashboard, getAdminDashboard } from "../api/dashboard";
 import { listResignations, decideResignation, simulateResignation } from "../api/resignations";
 import { createPosition } from "../api/positions";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { PageHeader, Card, Spinner, EmptyState, Button, Modal } from '../components/ui';
+import { StatusBadge } from '../components/StatusBadge';
+import { formatDate } from '../utils/constants';
+import type { Position } from '../types/models';
+
+function MiniPosition({ p }: { p: Position }) {
+  return (
+    <Link to={`/positions/${p.id}`} className="block p-3 rounded-md hover:bg-slate-50 border border-transparent hover:border-slate-200">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-slate-800 truncate">{p.jobTitle || 'Untitled'}</span>
+        <StatusBadge status={p.status} />
+      </div>
+      <div className="text-xs text-slate-500 mt-1">
+        {p.costCentre} · raised by {p.raisedByName ?? '—'} · updated {formatDate(p.updatedAt)}
+      </div>
+    </Link>
+  );
+}
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -28,7 +46,10 @@ export function DashboardPage() {
 
   return (
     <Layout>
-      <div className="p-8 text-center text-slate-500">Initializing your role dashboard…</div>
+      <div className="p-8 text-center text-slate-500">
+        <Spinner />
+        <p className="mt-2 text-sm text-slate-400">Initializing your role dashboard…</p>
+      </div>
     </Layout>
   );
 }
@@ -36,9 +57,8 @@ export function DashboardPage() {
 // ----------------- HIRING MANAGER DASHBOARD -----------------
 function HmDashboard() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [showSimulateModal, setShowSimulateModal] = useState(false);
-  const [showDecisionModal, setShowDecisionModal] = useState<{ id: string; name: string; action: "HIRE" | "NO_HIRE" } | null>(null);
+  const [decisionModalState, setDecisionModalState] = useState<{ id: string; name: string; action: "HIRE" | "NO_HIRE" } | null>(null);
 
   // Decision Form State
   const [decisionReason, setDecisionReason] = useState("");
@@ -76,24 +96,26 @@ function HmDashboard() {
     mutationFn: async ({ id, decision, reason, colour }: { id: string; decision: "HIRE" | "NO_HIRE"; reason: string; colour: string }) => {
       const res = await decideResignation(id, decision, reason, colour);
       if (decision === "HIRE") {
-        const draftInput = {
-          positionType: "REPLACEMENT" as const,
+        const user = useAuthStore.getState().user;
+        const draftInput: import('../api/positions').CreatePositionInput = {
+          positionType: "REPLACEMENT",
           costCentre: res.bu || "CC-001",
           jobCode: "",
-          division: res.department || "Technology",
+          division: res.department || "Engineering",
           jobTitle: `Replacement for ${res.employeeName}`,
-          reportingManager: "",
-          jd: `Replacement vacancy raised for ${res.employeeName} following approved resignation.`,
-          requiredSkills: [] as string[],
-          salaryRange: { min: 0, max: Number(res.lastSalary), currency: "INR" },
-          requiredStartDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          shiftTime: "09:00 - 18:00",
-          shiftDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          reportingManager: user?.name || "Hiring Manager",
+          jd: "Replacement position raised from approved resignation.",
+          requiredSkills: [],
+          salaryRange: { min: 0, max: res.lastSalary, currency: "INR" },
+          requiredStartDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
           location: "On-site",
           experienceLevel: "Mid",
-          impactIfUnfilled: "Immediate business impact on department deliverables.",
+          shiftTime: "General",
+          shiftDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
           sittingPlace: "TBD",
+          impactIfUnfilled: "Immediate replacement required to handle ongoing support.",
           approvalSkipped: false,
+          reviewerId: "",
           mrfTemplateId: "",
           replacementDetails: {
             exEmployeeId: res.employeeId,
@@ -103,23 +125,22 @@ function HmDashboard() {
             bu: res.bu,
             department: res.department,
             lastSalary: res.lastSalary,
-            reasonForLeaving: reason,
-            colourCode: colour as any,
-          }
+            reasonForLeaving: res.reasonForLeaving,
+            colourCode: res.colourCode,
+          },
         };
-        const pos = await createPosition(draftInput);
-        return { res, draftId: pos.id };
+        const newPos = await createPosition(draftInput);
+        alert(`Replacement MRF created as Draft! Navigating to complete details.`);
+        window.location.hash = `#/raise/${newPos.id}`;
+      } else {
+        alert("Replacement decision logged as NO HIRE.");
       }
-      return { res, draftId: null };
     },
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hm-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["resignations"] });
-      setShowDecisionModal(null);
+      setDecisionModalState(null);
       setDecisionReason("");
-      if (variables.decision === "HIRE" && data.draftId) {
-        navigate(`/raise/${data.draftId}`);
-      }
     },
     onError: (e) => alert(`Decision failed: ${(e as Error).message}`),
   });
@@ -140,16 +161,14 @@ function HmDashboard() {
   };
 
   const handleDecisionSubmit = () => {
-    if (!showDecisionModal) return;
+    if (!decisionModalState) return;
     decideMutation.mutate({
-      id: showDecisionModal.id,
-      decision: showDecisionModal.action,
+      id: decisionModalState.id,
+      decision: decisionModalState.action,
       reason: decisionReason,
       colour: decisionColour,
     });
   };
-
-  const pendingResignationsList = resignations?.filter((r) => r.status === "PENDING_ACTION") ?? [];
 
   if (dashError || resignError) {
     const errMsg = (dashErr as Error)?.message || (resignErr as Error)?.message || "Unknown error";
@@ -159,8 +178,8 @@ function HmDashboard() {
           <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
           <p className="text-sm text-slate-500">{errMsg}</p>
           <div className="flex justify-center gap-3">
-            <button onClick={() => { refetchDash(); refetchResign(); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
-            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+            <Button onClick={() => { refetchDash(); refetchResign(); }} variant="primary">Retry</Button>
+            <Button onClick={() => window.location.reload()} variant="secondary">Refresh Page</Button>
           </div>
         </div>
       </Layout>
@@ -170,223 +189,211 @@ function HmDashboard() {
   if (dashLoading || resignLoading) {
     return (
       <Layout>
-        <p className="text-slate-500">Loading your Hiring Manager Dashboard…</p>
+        <div className="flex justify-center py-12"><Spinner /></div>
       </Layout>
     );
   }
 
+  const c = dashboard?.counts || { draft: 0, pending: 0, approved: 0, posted: 0, onHold: 0, filled: 0, collapsed: 0 };
+  const pendingResignationsList = resignations?.filter((r) => r.status === "PENDING_ACTION") ?? [];
+
   return (
     <Layout>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Hiring Manager Dashboard</h1>
-          <p className="text-slate-500 mt-1">Review team requirements, raise headcounts, and process replacement decisions.</p>
-        </div>
-        <button
-          onClick={() => setShowSimulateModal(true)}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-600/10 hover:bg-emerald-700 transition-all"
-        >
-          Simulate Resignation Approval
-        </button>
-      </div>
+      <PageHeader 
+        title="Dashboard" 
+        subtitle="Your hiring activity at a glance" 
+        actions={
+          <Button variant="primary" onClick={() => setShowSimulateModal(true)}>
+            Simulate Resignation
+          </Button>
+        }
+      />
 
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Active Positions</div>
-          <div className="text-3xl font-bold text-indigo-600 mt-2">{dashboard?.activePositions ?? 0}</div>
+      <div className="space-y-6">
+        {/* Status Counts Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {[
+            ['Draft', c.draft], ['Pending', c.pending], ['Approved', c.approved],
+            ['Posted', c.posted], ['On Hold', c.onHold], ['Filled', c.filled], ['Collapsed', c.collapsed]
+          ].map(([label, val]) => (
+            <Card key={label as string} className="p-4 text-center">
+              <p className="text-2xl font-bold text-slate-900">{val ?? 0}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+            </Card>
+          ))}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Pending Approval</div>
-          <div className="text-3xl font-bold text-amber-500 mt-2">{dashboard?.pendingApprovals ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Drafts</div>
-          <div className="text-3xl font-bold text-slate-600 mt-2">{dashboard?.drafts ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-rose-100 bg-rose-50/30 p-5 shadow-sm">
-          <div className="text-rose-600 text-xs font-semibold uppercase tracking-wider">Inactivity Warnings</div>
-          <div className="text-3xl font-bold text-rose-700 mt-2">{dashboard?.inactivityWarnings ?? 0}</div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Resignations Queue (replacement workflow) */}
-        <div className="lg:col-span-2 space-y-6">
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900 border-b pb-3 mb-4">
-              Approved Resignations Queue ({pendingResignationsList.length})
-            </h2>
-            {pendingResignationsList.length === 0 ? (
-              <p className="text-sm text-slate-400 py-4 text-center">No pending resignations require replacement decisions.</p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {pendingResignationsList.map((res) => (
-                  <div key={res.id} className="py-4 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-slate-800">{res.employeeName}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {res.bu} · {res.department} · Last Salary: ₹{res.lastSalary.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex gap-2.5">
-                      <button
-                        onClick={() => setShowDecisionModal({ id: res.id, name: res.employeeName, action: "HIRE" })}
-                        className="rounded bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
-                      >
-                        Hire Replacement
-                      </button>
-                      <button
-                        onClick={() => setShowDecisionModal({ id: res.id, name: res.employeeName, action: "NO_HIRE" })}
-                        className="rounded bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-                      >
-                        No Hire
-                      </button>
-                    </div>
+        {/* Resignations Replacement Card */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Approved Resignations (Awaiting Replacement Decision)</h3>
+          {pendingResignationsList.length === 0 ? (
+            <EmptyState title="No pending resignations" hint="Your direct reports are in good standing." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {pendingResignationsList.map((res) => (
+                <div key={res.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-slate-800 text-sm">{res.employeeName}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {res.bu} · {res.department} · Last Salary: ₹{res.lastSalary.toLocaleString()}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="primary"
+                      onClick={() => setDecisionModalState({ id: res.id, name: res.employeeName, action: "HIRE" })}
+                      className="py-1 px-2.5 text-xs"
+                    >
+                      Hire Replacement
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setDecisionModalState({ id: res.id, name: res.employeeName, action: "NO_HIRE" })}
+                      className="py-1 px-2.5 text-xs"
+                    >
+                      No Hire
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Mini Positions Grid */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">Awaiting your action</h3>
+            <div className="space-y-1">
+              {dashboard?.awaitingMyAction?.length ? dashboard.awaitingMyAction.map((p: Position) => <MiniPosition key={p.id} p={p} />)
+                : <EmptyState title="Nothing pending" hint="Drafts and rejections show up here." />}
+            </div>
+          </Card>
+          
+          <Card className="p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">On hold</h3>
+            <div className="space-y-2">
+              {dashboard?.onHold?.length ? dashboard.onHold.map((h) => (
+                <Link key={h.id} to={`/positions/${h.id}`} className="block p-3 rounded border border-slate-200 hover:bg-slate-50">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-slate-800">{h.jobTitle}</span>
+                    <span className="text-xs text-purple-700 font-medium">{h.daysRemaining}d left</span>
+                  </div>
+                </Link>
+              )) : <EmptyState title="No positions on hold" />}
+            </div>
+          </Card>
         </div>
 
-        {/* Recent Activities */}
-        <div>
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm h-full">
-            <h2 className="text-lg font-bold text-slate-900 border-b pb-3 mb-4">Recent Position Actions</h2>
-            {dashboard?.recentActivities && dashboard.recentActivities.length > 0 ? (
-              <div className="space-y-4">
-                {dashboard.recentActivities.map((act, index) => (
-                  <div key={index} className="text-xs leading-normal">
-                    <p className="font-semibold text-slate-700">{act.jobTitle} ({act.jobCode})</p>
-                    <p className="text-indigo-600 mt-0.5">{act.audit.action}</p>
-                    <p className="text-slate-400 mt-0.5">{new Date(act.audit.timestamp).toLocaleDateString()} · {act.audit.notes}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400 py-4 text-center">No recent activities logged.</p>
-            )}
-          </section>
-        </div>
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Open positions</h3>
+          <div className="space-y-1">
+            {dashboard?.openPositions?.length ? dashboard.openPositions.map((p: Position) => <MiniPosition key={p.id} p={p} />)
+              : <EmptyState title="No open positions" hint="Click Raise Position to start a new MRF." />}
+          </div>
+        </Card>
       </div>
 
       {/* Decision Modal */}
-      {showDecisionModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
-              Decision for {showDecisionModal.name}'s Replacement
-            </h3>
-            <p className="text-sm text-slate-500 mb-4">
-              Confirm your decision. Ticking "Hire Replacement" will open the Replacement manpower requisition form.
-            </p>
+      <Modal 
+        open={!!decisionModalState} 
+        onClose={() => setDecisionModalState(null)} 
+        title={`Decision for ${decisionModalState?.name}'s Replacement`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Confirm your decision. Ticking "Hire Replacement" will open the Replacement manpower requisition form.
+          </p>
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Colour Coding (Required)</label>
-                <select
-                  value={decisionColour}
-                  onChange={(e) => setDecisionColour(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 p-2.5 text-sm"
-                >
-                  <option value="GREEN">GREEN - voluntary resignation, good standing</option>
-                  <option value="RED">RED - performance-related departure</option>
-                  <option value="BLACK">BLACK - serious misconduct / involuntary termination</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason for Departure / Leaving</label>
-                <textarea
-                  value={decisionReason}
-                  onChange={(e) => setDecisionReason(e.target.value)}
-                  placeholder="Provide context for the resignation..."
-                  rows={3}
-                  className="w-full rounded-lg border border-slate-200 p-2.5 text-sm"
-                />
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Colour Coding (Required)</label>
+              <select
+                value={decisionColour}
+                onChange={(e) => setDecisionColour(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm bg-white"
+              >
+                <option value="GREEN">GREEN - voluntary resignation, good standing</option>
+                <option value="RED">RED - performance-related departure</option>
+                <option value="BLACK">BLACK - serious misconduct / involuntary termination</option>
+              </select>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDecisionModal(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDecisionSubmit}
-                disabled={decideMutation.isPending}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/10 transition-all disabled:opacity-50"
-              >
-                {decideMutation.isPending ? "Saving..." : "Confirm Decision"}
-              </button>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason for Departure / Leaving</label>
+              <textarea
+                value={decisionReason}
+                onChange={(e) => setDecisionReason(e.target.value)}
+                placeholder="Provide context for the resignation..."
+                rows={3}
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"
+              />
             </div>
           </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <Button variant="secondary" onClick={() => setDecisionModalState(null)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleDecisionSubmit}
+              disabled={decideMutation.isPending}
+            >
+              {decideMutation.isPending ? "Saving..." : "Confirm Decision"}
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Simulation Modal */}
-      {showSimulateModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleSimulateSubmit} className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 border border-slate-100 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Simulate Resignation Approval</h3>
-            <p className="text-xs text-slate-400">Trigger an approved resignation inside the system to populate the HM's replacement queue.</p>
+      <Modal open={showSimulateModal} onClose={() => setShowSimulateModal(false)} title="Simulate Resignation Approval">
+        <form onSubmit={handleSimulateSubmit} className="space-y-4">
+          <p className="text-xs text-slate-400">Trigger an approved resignation inside the system to populate the HM's replacement queue.</p>
 
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1">Employee Name</label>
-                <input value={simName} onChange={(e) => setSimName(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
-                <input value={simEmail} onChange={(e) => setSimEmail(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Phone</label>
-                <input value={simPhone} onChange={(e) => setSimPhone(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">BU</label>
-                <input value={simBu} onChange={(e) => setSimBu(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Department</label>
-                <input value={simDept} onChange={(e) => setSimDept(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1">Last Salary (Annual INR)</label>
-                <input type="number" value={simSalary} onChange={(e) => setSimSalary(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1">Employee Name</label>
+              <input value={simName} onChange={(e) => setSimName(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
+              <input value={simEmail} onChange={(e) => setSimEmail(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Phone</label>
+              <input value={simPhone} onChange={(e) => setSimPhone(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">BU</label>
+              <input value={simBu} onChange={(e) => setSimBu(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Department</label>
+              <input value={simDept} onChange={(e) => setSimDept(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1">Last Salary (Annual INR)</label>
+              <input type="number" value={simSalary} onChange={(e) => setSimSalary(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+          </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t">
-              <button
-                type="button"
-                onClick={() => setShowSimulateModal(false)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={simMutation.isPending}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 shadow-md disabled:opacity-50"
-              >
-                {simMutation.isPending ? "Creating..." : "Submit Simulation"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <Button variant="secondary" onClick={() => setShowSimulateModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={simMutation.isPending}>
+              {simMutation.isPending ? "Creating..." : "Submit Simulation"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </Layout>
   );
 }
 
 // ----------------- TALENT ACQUISITION (HR) DASHBOARD -----------------
 function TaDashboard() {
-  const navigate = useNavigate();
   const { data: dashboard, isLoading, isError, error: taErr, refetch } = useQuery({
     queryKey: ["ta-dashboard"],
     queryFn: getTaDashboard,
@@ -399,8 +406,8 @@ function TaDashboard() {
           <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
           <p className="text-sm text-slate-500">{(taErr as Error)?.message || "Unknown error"}</p>
           <div className="flex justify-center gap-3">
-            <button onClick={() => refetch()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
-            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+            <Button onClick={() => refetch()} variant="primary">Retry</Button>
+            <Button onClick={() => window.location.reload()} variant="secondary">Refresh Page</Button>
           </div>
         </div>
       </Layout>
@@ -410,63 +417,57 @@ function TaDashboard() {
   if (isLoading) {
     return (
       <Layout>
-        <p className="text-slate-500">Loading Talent Acquisition Dashboard…</p>
+        <div className="flex justify-center py-12"><Spinner /></div>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">TA Dashboard</h1>
-        <p className="text-slate-500 mt-1">Recruitment summary, approved positions queue, and candidates pipeline overview.</p>
-      </div>
+      <PageHeader title="Dashboard" subtitle="Recruitment pipelines and approved positions queue" />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Approved (Not Posted)</div>
-          <div className="text-3xl font-bold text-indigo-600 mt-2">{dashboard?.approvedNotPosted ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Posted Vacancies</div>
-          <div className="text-3xl font-bold text-emerald-600 mt-2">{dashboard?.postedPositions ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Hires (Last 30 Days)</div>
-          <div className="text-3xl font-bold text-violet-600 mt-2">{dashboard?.hiredThisMonth ?? 0}</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">Job Posting Backlog</h3>
-            <p className="text-sm text-slate-500 mt-1">Review newly approved manpower requests and transition them to the posted state.</p>
-          </div>
-          <div className="mt-6">
-            <button
-              onClick={() => navigate("/positions?status=APPROVED")}
-              className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/10 hover:bg-indigo-700 transition-all w-full text-center"
-            >
-              Mark Positions as Posted
-            </button>
-          </div>
+      <div className="space-y-6">
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-amber-600">{dashboard?.notYetPosted?.length ?? 0}</p>
+            <p className="text-sm text-slate-600">Approved, not yet posted</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-blue-600">{dashboard?.pendingApprovals?.length ?? 0}</p>
+            <p className="text-sm text-slate-600">Approvals pending</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-emerald-600">{dashboard?.pipelineSummaries?.length ?? 0}</p>
+            <p className="text-sm text-slate-600">Active candidate pipelines</p>
+          </Card>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">Review Approval Requests</h3>
-            <p className="text-sm text-slate-500 mt-1">Review new requisitions routed from HMs for TA validation before final sign-off.</p>
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Not yet posted</h3>
+          <div className="space-y-1">
+            {dashboard?.notYetPosted?.length ? dashboard.notYetPosted.map((p: Position) => <MiniPosition key={p.id} p={p} />)
+              : <EmptyState title="All approved positions have been posted" />}
           </div>
-          <div className="mt-6">
-            <button
-              onClick={() => navigate("/positions?status=PENDING_APPROVAL")}
-              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-slate-900/10 hover:bg-slate-800 transition-all w-full text-center"
-            >
-              Go to Approval Queue
-            </button>
+        </Card>
+
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Active pipelines</h3>
+          <div className="space-y-2">
+            {dashboard?.pipelineSummaries?.length ? dashboard.pipelineSummaries.map((s) => (
+              <Link key={s.id} to={`/positions/${s.id}/candidates`} className="block p-3 rounded border border-slate-200 hover:bg-slate-50">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-slate-800">{s.jobTitle}</span>
+                  <span className="text-xs text-slate-500">{s.total} candidate{s.total !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {Object.entries(s.byStage ?? {}).map(([stage, n]) => (
+                    <span key={stage} className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-medium">{stage.replace(/_/g, ' ')}: {n}</span>
+                  ))}
+                </div>
+              </Link>
+            )) : <EmptyState title="No active pipelines" hint="Positions appear here once posted." />}
           </div>
-        </div>
+        </Card>
       </div>
     </Layout>
   );
@@ -501,8 +502,8 @@ function AdminDashboard() {
           <p className="text-rose-600 font-semibold">Failed to load dashboard</p>
           <p className="text-sm text-slate-500">{(adminErr as Error)?.message || "Unknown error"}</p>
           <div className="flex justify-center gap-3">
-            <button onClick={() => refetch()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Retry</button>
-            <button onClick={() => window.location.reload()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Refresh Page</button>
+            <Button onClick={() => refetch()} variant="primary">Retry</Button>
+            <Button onClick={() => window.location.reload()} variant="secondary">Refresh Page</Button>
           </div>
         </div>
       </Layout>
@@ -512,92 +513,80 @@ function AdminDashboard() {
   if (isLoading) {
     return (
       <Layout>
-        <p className="text-slate-500">Loading Platform Admin Dashboard…</p>
+        <div className="flex justify-center py-12"><Spinner /></div>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Admin Console</h1>
-          <p className="text-slate-500 mt-1">System-wide parameters, template catalog, user directory, and database health.</p>
-        </div>
-        <button
-          onClick={handleSeedDatabase}
-          disabled={seeding}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-all disabled:opacity-50"
-        >
-          {seeding ? "Seeding Database…" : "Reset & Seed Database"}
-        </button>
-      </div>
+      <PageHeader 
+        title="Admin Console" 
+        subtitle="System overview and seeding parameters" 
+        actions={
+          <Button variant="secondary" onClick={handleSeedDatabase} disabled={seeding}>
+            {seeding ? "Seeding Database…" : "Reset & Seed Database"}
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Positions</div>
-          <div className="text-3xl font-bold text-indigo-600 mt-2">{dashboard?.totalPositions ?? 0}</div>
+      <div className="space-y-6">
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-slate-900">{dashboard?.totalPositions ?? 0}</p>
+            <p className="text-sm text-slate-600">Total positions</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-slate-900">{dashboard?.totalUsers ?? 0}</p>
+            <p className="text-sm text-slate-600">Total users</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-2xl font-bold text-red-600">{dashboard?.approachingCollapse?.length ?? 0}</p>
+            <p className="text-sm text-slate-600">Approaching auto-collapse</p>
+          </Card>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Active Users</div>
-          <div className="text-3xl font-bold text-emerald-600 mt-2">{dashboard?.totalUsers ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Cost Centres</div>
-          <div className="text-3xl font-bold text-violet-600 mt-2">{dashboard?.totalCostCentres ?? 0}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Job Templates</div>
-          <div className="text-3xl font-bold text-slate-700 mt-2">{dashboard?.totalTemplates ?? 0}</div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-3">Requisition Breakdown by Status</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-            {Object.entries(dashboard?.statusBreakdown ?? {}).map(([status, count]) => (
-              <div key={status} className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{status}</span>
-                <span className="text-2xl font-extrabold text-slate-700 mt-1 block">{count}</span>
-              </div>
-            ))}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">Positions by status</h3>
+            <div className="space-y-1.5">
+              {Object.entries(dashboard?.byStatus ?? {}).map(([status, n]) => (
+                <div key={status} className="flex justify-between items-center py-0.5 border-b border-slate-50 last:border-0">
+                  <StatusBadge status={status as import('../types/models').PositionStatus} />
+                  <span className="font-semibold text-slate-800">{n}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+          
+          <Card className="p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">Users by role</h3>
+            <div className="space-y-1.5">
+              {Object.entries(dashboard?.usersByRole ?? {}).map(([role, n]) => (
+                <div key={role} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
+                  <span className="text-slate-600 font-medium">{role}</span>
+                  <span className="font-semibold text-slate-800">{n}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Approaching collapse (≥150 days inactive)</h3>
+          <div className="space-y-1">
+            {dashboard?.approachingCollapse?.length ? dashboard.approachingCollapse.map((p) => (
+              <Link key={p.id} to={`/positions/${p.id}`} className="block p-3 rounded border border-slate-200 hover:bg-slate-50">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-slate-800">{p.jobTitle}</span>
+                  <span className={`text-xs font-medium ${p.daysSince >= 170 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {p.daysSince} days inactive
+                  </span>
+                </div>
+              </Link>
+            )) : <EmptyState title="Nothing approaching collapse" />}
           </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-3">Quick Configuration Panel</h3>
-          <div className="space-y-3">
-            <Link
-              to="/admin/users"
-              className="flex items-center justify-between rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition-colors text-sm font-semibold text-slate-700"
-            >
-              <span>Manage System Users</span>
-              <span className="text-indigo-600">&rarr;</span>
-            </Link>
-            <Link
-              to="/admin/templates"
-              className="flex items-center justify-between rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition-colors text-sm font-semibold text-slate-700"
-            >
-              <span>Configure MRF Templates</span>
-              <span className="text-indigo-600">&rarr;</span>
-            </Link>
-            <Link
-              to="/admin/cost-centres"
-              className="flex items-center justify-between rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition-colors text-sm font-semibold text-slate-700"
-            >
-              <span>Configure Cost Centres</span>
-              <span className="text-indigo-600">&rarr;</span>
-            </Link>
-            <Link
-              to="/admin/doa"
-              className="flex items-center justify-between rounded-lg border border-slate-200 p-3 hover:bg-slate-50 transition-colors text-sm font-semibold text-slate-700"
-            >
-              <span>Manage Delegation (DoA) List</span>
-              <span className="text-indigo-600">&rarr;</span>
-            </Link>
-          </div>
-        </div>
+        </Card>
       </div>
     </Layout>
   );

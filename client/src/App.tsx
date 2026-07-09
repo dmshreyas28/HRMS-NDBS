@@ -19,6 +19,7 @@ import { AdminTemplatesPage } from "./pages/admin/AdminTemplatesPage";
 import { AdminCostCentresPage } from "./pages/admin/AdminCostCentresPage";
 import { AdminDoaPage } from "./pages/admin/AdminDoaPage";
 import { AdminPositionsPage } from "./pages/admin/AdminPositionsPage";
+import { ToastContainer } from "./components/ToastContainer";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -62,12 +63,12 @@ function AuthGate() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-12 text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 text-slate-900">
         <div className="w-full max-w-2xl text-center space-y-4 mb-8">
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-indigo-300">
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-indigo-500 to-indigo-600">
             HRMS Talent Acquisition
           </h1>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">
+          <p className="text-slate-500 text-sm max-w-md mx-auto">
             Choose a profile below to pre-fill your Auth0 login details, or sign in manually.
           </p>
         </div>
@@ -77,27 +78,27 @@ function AuthGate() {
             <button
               key={p.role}
               onClick={() => loginWithRedirect({ authorizationParams: { login_hint: p.email, prompt: "login" } })}
-              className="flex flex-col text-left rounded-xl border border-slate-800 bg-slate-900/60 p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-all duration-200 group shadow-lg hover:shadow-indigo-500/5 cursor-pointer"
+              className="flex flex-col text-left rounded-xl border border-slate-200 bg-white p-5 hover:border-brand-500/50 hover:shadow-md transition-all duration-200 group shadow-sm cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-2 w-full">
                 <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${p.badgeBg}`}>
                   {p.roleName}
                 </span>
               </div>
-              <p className="font-mono text-xs font-semibold text-slate-300 group-hover:text-indigo-300 transition-colors mb-2">
+              <p className="font-mono text-xs font-semibold text-slate-700 group-hover:text-brand-600 transition-colors mb-2">
                 {p.email}
               </p>
-              <p className="text-slate-400 text-[11px] leading-relaxed mt-auto">
+              <p className="text-slate-500 text-[11px] leading-relaxed mt-auto">
                 {p.description}
               </p>
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-4 w-full max-w-md justify-center border-t border-slate-800/80 pt-6">
+        <div className="flex items-center gap-4 w-full max-w-md justify-center border-t border-slate-200 pt-6">
           <button
-            onClick={() => loginWithRedirect()}
-            className="rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 px-6 py-2.5 text-xs font-bold text-slate-300 transition-all hover:border-slate-700"
+            onClick={() => loginWithRedirect({ authorizationParams: { prompt: "login" } })}
+            className="rounded-lg bg-white hover:bg-slate-50 border border-slate-300 px-6 py-2.5 text-xs font-bold text-slate-700 transition-all hover:border-slate-400"
           >
             Sign In Manually
           </button>
@@ -193,6 +194,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGate />
+      <ToastContainer />
     </QueryClientProvider>
   );
 }

@@ -194,7 +194,7 @@ namespace HRMS.API.Models
 
         [BsonElement("mrfTemplateId")]
         [BsonRepresentation(BsonType.ObjectId)]
-        public string MrfTemplateId { get; set; } = null!;
+        public string? MrfTemplateId { get; set; }
 
         [BsonElement("jobPostedAt")]
         public DateTime? JobPostedAt { get; set; }

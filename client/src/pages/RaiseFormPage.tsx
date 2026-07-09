@@ -1,76 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "../components/Layout";
-import { FormField, inputClass } from "../components/FormField";
-import { TagInput } from "../components/TagInput";
 import { StatusBadge } from "../components/StatusBadge";
 import { usePosition, useUpdateDraft, useSubmitPosition } from "../hooks/usePositions";
 import { useTemplatesByCostCentre } from "../hooks/useTemplates";
-import { useCostCentres } from "../hooks/useCostCentres";
+import { listDoa } from "../api/doa";
 import { useAuthStore } from "../store/authStore";
-import type { MrfTemplate } from "../types/models";
-
-const LOCATIONS = ["Remote", "On-site", "Hybrid"];
-const EXPERIENCE_LEVELS = ["Junior", "Mid", "Senior", "Lead"];
-const SHIFT_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-interface FormState {
-  mrfTemplateId: string;
-  jobTitle: string;
-  jobCode: string;
-  division: string;
-  reportingManager: string;
-  jd: string;
-  requiredSkills: string[];
-  salaryMin: string;
-  salaryMax: string;
-  requiredStartDate: string;
-  location: string;
-  experienceLevel: string;
-  shiftTime: string;
-  shiftDays: string[];
-  sittingPlace: string;
-  impactIfUnfilled: string;
-  // Replacement-only fields
-  exEmployeeName: string;
-  exEmployeeId: string;
-  exEmployeeEmail: string;
-  exEmployeePhone: string;
-  bu: string;
-  department: string;
-  lastSalary: string;
-  reasonForLeaving: string;
-  colourCode: string;
-}
-
-function emptyForm(): FormState {
-  return {
-    mrfTemplateId: "", jobTitle: "", jobCode: "", division: "", reportingManager: "", jd: "",
-    requiredSkills: [], salaryMin: "", salaryMax: "", requiredStartDate: "", location: "",
-    experienceLevel: "", shiftTime: "", shiftDays: [], sittingPlace: "", impactIfUnfilled: "",
-    exEmployeeName: "", exEmployeeId: "", exEmployeeEmail: "", exEmployeePhone: "",
-    bu: "", department: "", lastSalary: "", reasonForLeaving: "", colourCode: "",
-  };
-}
-
-function fromPosition(p: any): FormState {
-  const rd = p.replacementDetails ?? {};
-  return {
-    mrfTemplateId: p.mrfTemplateId ?? "", jobTitle: p.jobTitle ?? "", jobCode: p.jobCode ?? "",
-    division: p.division ?? "", reportingManager: p.reportingManager ?? "", jd: p.jd ?? "",
-    requiredSkills: p.requiredSkills ?? [], salaryMin: String(p.salaryRange?.min ?? ""),
-    salaryMax: String(p.salaryRange?.max ?? ""),
-    requiredStartDate: p.requiredStartDate ? p.requiredStartDate.slice(0, 10) : "",
-    location: p.location ?? "", experienceLevel: p.experienceLevel ?? "", shiftTime: p.shiftTime ?? "",
-    shiftDays: p.shiftDays ?? [], sittingPlace: p.sittingPlace ?? "",
-    impactIfUnfilled: p.impactIfUnfilled ?? "",
-    exEmployeeName: rd.exEmployeeName ?? "", exEmployeeId: rd.exEmployeeId ?? "",
-    exEmployeeEmail: rd.exEmployeeEmail ?? "", exEmployeePhone: rd.exEmployeePhone ?? "",
-    bu: rd.bu ?? "", department: rd.department ?? "",
-    lastSalary: rd.lastSalary ? String(rd.lastSalary) : "",
-    reasonForLeaving: rd.reasonForLeaving ?? "", colourCode: rd.colourCode ?? "",
-  };
-}
+import { PageHeader, Card, Spinner, Button, Input, Textarea, Select } from '../components/ui';
 
 export function RaiseFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -79,312 +16,545 @@ export function RaiseFormPage() {
 
   const { data: position, isLoading } = usePosition(id);
   const { data: templates } = useTemplatesByCostCentre(user?.costCentre);
-  const { data: costCentres } = useCostCentres();
+  const { data: doa } = useQuery({
+    queryKey: ["doa"],
+    queryFn: listDoa,
+  });
 
   const updateDraft = useUpdateDraft(id!);
   const submitPosition = useSubmitPosition();
 
-  const [form, setForm] = useState<FormState>(emptyForm());
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [appliedTemplateId, setAppliedTemplateId] = useState<string>("");
+  type FormState = {
+    mrfTemplateId: string; jobTitle: string; jobCode: string; division: string;
+    reportingManager: string; jd: string; requiredSkills: string[];
+    salaryRange: { min: number; max: number; currency: string };
+    requiredStartDate: string; location: string; experienceLevel: string;
+    shiftTime: string; shiftDays: string[]; sittingPlace: string; impactIfUnfilled: string;
+    approvalSkipped: boolean; approvalSkippedReason: string; reviewerId: string;
+    replacementDetails?: {
+      exEmployeeName: string; exEmployeeId: string; exEmployeeEmail: string;
+      exEmployeePhone: string; bu: string; department: string;
+      lastSalary: number; reasonForLeaving: string; colourCode: string;
+    };
+  };
+  const formInitialised = useRef(false);
+  const [form, setForm] = useState<FormState>({
+    mrfTemplateId: "",
+    jobTitle: "",
+    jobCode: "",
+    division: "",
+    reportingManager: "",
+    jd: "",
+    requiredSkills: [],
+    salaryRange: { min: 0, max: 0, currency: "INR" },
+    requiredStartDate: "",
+    location: "",
+    experienceLevel: "",
+    shiftTime: "",
+    shiftDays: [],
+    sittingPlace: "",
+    impactIfUnfilled: "",
+    approvalSkipped: false,
+    approvalSkippedReason: "",
+    reviewerId: "",
+    replacementDetails: undefined,
+  });
 
   useEffect(() => {
-    if (position) {
-      setForm(fromPosition(position));
-      setAppliedTemplateId(position.mrfTemplateId);
+    if (position && !formInitialised.current) {
+      formInitialised.current = true;
+      const rd = position.replacementDetails;
+      setForm({
+        mrfTemplateId: position.mrfTemplateId ?? "",
+        jobTitle: position.jobTitle ?? "",
+        jobCode: position.jobCode ?? "",
+        division: position.division ?? "",
+        reportingManager: position.reportingManager ?? "",
+        jd: position.jd ?? "",
+        requiredSkills: position.requiredSkills ?? [],
+        salaryRange: {
+          min: position.salaryRange?.min ?? 0,
+          max: position.salaryRange?.max ?? 0,
+          currency: position.salaryRange?.currency ?? "INR",
+        },
+        requiredStartDate: position.requiredStartDate ? position.requiredStartDate.substring(0, 10) : "",
+        location: position.location ?? "",
+        experienceLevel: position.experienceLevel ?? "",
+        shiftTime: position.shiftTime ?? "",
+        shiftDays: position.shiftDays ?? [],
+        sittingPlace: position.sittingPlace ?? "",
+        impactIfUnfilled: position.impactIfUnfilled ?? "",
+        approvalSkipped: position.approvalSkipped ?? false,
+        approvalSkippedReason: position.approvalSkippedReason ?? "",
+        reviewerId: position.reviewerId ?? "",
+        replacementDetails: position.positionType === "REPLACEMENT" && rd ? {
+          exEmployeeName: rd.exEmployeeName ?? "",
+          exEmployeeId: rd.exEmployeeId ?? "",
+          exEmployeeEmail: rd.exEmployeeEmail ?? "",
+          exEmployeePhone: rd.exEmployeePhone ?? "",
+          bu: rd.bu ?? "",
+          department: rd.department ?? "",
+          lastSalary: rd.lastSalary ?? 0,
+          reasonForLeaving: rd.reasonForLeaving ?? "",
+          colourCode: rd.colourCode ?? "GREEN",
+        } : undefined,
+      });
     }
   }, [position]);
 
-  const costCentreName = useMemo(() => {
-    const cc = costCentres?.find((c) => c.code === user?.costCentre);
-    return cc?.name ?? user?.costCentre ?? "";
-  }, [costCentres, user?.costCentre]);
-
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((f) => ({ ...f, [key]: value }));
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+    setForm((f) => ({ ...f, [k]: v }));
   };
 
-  const applyTemplate = (template: MrfTemplate | undefined) => {
-    if (!template) return;
-    setForm((f) => ({
-      ...f, mrfTemplateId: template.id, jobTitle: template.jobTitle, jd: template.jdSkeleton,
-      requiredSkills: [...template.requiredSkills], salaryMin: String(template.salaryRange.min),
-      salaryMax: String(template.salaryRange.max), division: costCentreName,
-    }));
-    setAppliedTemplateId(template.id);
-  };
-
-  const onTemplateSelect = (templateId: string) => {
-    if (templateId === "") { set("mrfTemplateId", ""); return; }
-    applyTemplate(templates?.find((t) => t.id === templateId));
-  };
-
-  const reapplyTemplate = () => {
-    applyTemplate(templates?.find((t) => t.id === appliedTemplateId));
-  };
-
-  const validate = (strict: boolean): boolean => {
-    const e: Record<string, string> = {};
-    const req = (k: keyof FormState, label: string) => {
-      if (!String(form[k]).trim()) e[k] = `${label} is required.`;
-    };
-    if (strict) {
-      req("mrfTemplateId", "Template");
-      req("jobTitle", "Job title");
-      req("jobCode", "Job code");
-      req("division", "Division");
-      req("jd", "Job description");
-      if (form.requiredSkills.length === 0) e.requiredSkills = "At least one skill is required.";
-      req("requiredStartDate", "Required start date");
-      req("location", "Location");
-      req("experienceLevel", "Experience level");
-      req("shiftTime", "Shift time");
-      if (form.shiftDays.length === 0) e.shiftDays = "At least one shift day is required.";
-      req("impactIfUnfilled", "Impact if unfilled");
-      const min = Number(form.salaryMin);
-      const max = Number(form.salaryMax);
-      if (!min || !max) e.salaryMin = "Salary range is required.";
-      else if (min >= max) e.salaryMin = "Min must be less than max.";
-      if (form.requiredStartDate) {
-        const d = new Date(form.requiredStartDate);
-        if (d.getTime() < Date.now() - 86_400_000) e.requiredStartDate = "Start date must be in the future.";
-      }
-      if (position?.positionType === "REPLACEMENT") {
-        req("exEmployeeName", "Ex-employee name");
-        req("exEmployeeId", "Ex-employee ID");
-        req("exEmployeeEmail", "Ex-employee email");
-        req("exEmployeePhone", "Ex-employee phone number");
-        req("bu", "Business unit (BU)");
-        req("department", "Department");
-        req("lastSalary", "Last salary");
-        req("colourCode", "Departure color code");
-      }
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const buildUpdateInput = () => ({
-    costCentre: user?.costCentre ?? "", division: form.division, jobTitle: form.jobTitle,
-    reportingManager: form.reportingManager, jd: form.jd, requiredSkills: form.requiredSkills,
-    salaryRange: { min: Number(form.salaryMin) || 0, max: Number(form.salaryMax) || 0, currency: "INR" },
-    requiredStartDate: new Date(form.requiredStartDate).toISOString(), shiftTime: form.shiftTime,
-    shiftDays: form.shiftDays, location: form.location, experienceLevel: form.experienceLevel,
-    impactIfUnfilled: form.impactIfUnfilled, sittingPlace: form.sittingPlace, reviewerId: null,
-    ...(position?.positionType === "REPLACEMENT" ? {
-      replacementDetails: {
-        exEmployeeName: form.exEmployeeName, exEmployeeId: form.exEmployeeId,
-        exEmployeeEmail: form.exEmployeeEmail, exEmployeePhone: form.exEmployeePhone,
-        bu: form.bu, department: form.department,
-        lastSalary: Number(form.lastSalary) || 0,
-        reasonForLeaving: form.reasonForLeaving, colourCode: form.colourCode,
-      }
-    } : {}),
-  });
-
-  const handleSaveDraft = () => {
-    validate(false);
-    updateDraft.mutate(buildUpdateInput(), {
-      onSuccess: () => navigate("/raise"),
-      onError: (e) => alert(`Save failed: ${(e as Error).message}`),
+  const setReplacementDetail = <K extends keyof NonNullable<FormState["replacementDetails"]>>(
+    key: K,
+    value: NonNullable<FormState["replacementDetails"]>[K]
+  ) => {
+    setForm((f) => {
+      const rd = f.replacementDetails || {
+        exEmployeeName: "",
+        exEmployeeId: "",
+        exEmployeeEmail: "",
+        exEmployeePhone: "",
+        bu: "",
+        department: "",
+        lastSalary: 0,
+        reasonForLeaving: "",
+        colourCode: "GREEN",
+      };
+      return {
+        ...f,
+        replacementDetails: {
+          ...rd,
+          [key]: value,
+        },
+      };
     });
   };
 
-  const handleSubmit = () => {
-    if (!validate(true)) return;
-    updateDraft.mutate(buildUpdateInput(), {
+  const applyTemplate = (templateId: string) => {
+    set("mrfTemplateId", templateId);
+    const tpl = templates?.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setForm((f) => ({
+      ...f,
+      mrfTemplateId: templateId,
+      jobTitle: tpl.jobTitle,
+      jd: tpl.jdSkeleton,
+      requiredSkills: tpl.requiredSkills,
+      salaryRange: { ...tpl.salaryRange, currency: "INR" },
+      division: tpl.costCentre,
+    }));
+  };
+
+  const save = async (submit: boolean) => {
+    if (form.approvalSkipped && !form.approvalSkippedReason) {
+      alert("Please provide a reason for skipping approval");
+      return;
+    }
+    if (!form.approvalSkipped && submit && !form.reviewerId) {
+      alert("Please select a reviewer, or mark approval as not required");
+      return;
+    }
+
+    const payload = {
+      costCentre: user?.costCentre ?? "",
+      division: form.division,
+      jobTitle: form.jobTitle,
+      reportingManager: form.reportingManager,
+      jd: form.jd,
+      requiredSkills: form.requiredSkills,
+      salaryRange: {
+        min: Number(form.salaryRange.min) || 0,
+        max: Number(form.salaryRange.max) || 0,
+        currency: form.salaryRange.currency || "INR",
+      },
+      requiredStartDate: form.requiredStartDate ? new Date(form.requiredStartDate).toISOString() : new Date().toISOString(),
+      shiftTime: form.shiftTime,
+      shiftDays: form.shiftDays,
+      location: form.location,
+      experienceLevel: form.experienceLevel,
+      impactIfUnfilled: form.impactIfUnfilled,
+      sittingPlace: form.sittingPlace,
+      reviewerId: form.approvalSkipped ? null : form.reviewerId || null,
+      mrfTemplateId: form.mrfTemplateId,
+      ...(position?.positionType === "REPLACEMENT" ? {
+        replacementDetails: {
+          exEmployeeName: form.replacementDetails?.exEmployeeName ?? "",
+          exEmployeeId: form.replacementDetails?.exEmployeeId ?? "",
+          exEmployeeEmail: form.replacementDetails?.exEmployeeEmail ?? "",
+          exEmployeePhone: form.replacementDetails?.exEmployeePhone ?? "",
+          bu: form.replacementDetails?.bu ?? "",
+          department: form.replacementDetails?.department ?? "",
+          lastSalary: Number(form.replacementDetails?.lastSalary) || 0,
+          reasonForLeaving: form.replacementDetails?.reasonForLeaving ?? "",
+          colourCode: form.replacementDetails?.colourCode ?? "GREEN",
+        }
+      } : {}),
+    };
+
+    updateDraft.mutate(payload, {
       onSuccess: () => {
-        submitPosition.mutate(
-          { id: id!, input: { reviewerId: null, approvalSkipped: false } },
-          {
-            onSuccess: () => navigate("/raise"),
-            onError: (e) => alert(`Submit failed: ${(e as Error).message}`),
-          }
-        );
+        if (submit) {
+          submitPosition.mutate(
+            {
+              id: id!,
+              input: {
+                reviewerId: form.approvalSkipped ? null : form.reviewerId || null,
+                approvalSkipped: form.approvalSkipped,
+                approvalSkippedReason: form.approvalSkipped ? form.approvalSkippedReason : null,
+              },
+            },
+            {
+              onSuccess: () => {
+                alert("MRF submitted for approval");
+                navigate("/raise");
+              },
+              onError: (e) => alert(`Submit failed: ${(e as Error).message}`),
+            }
+          );
+        } else {
+          alert("Draft saved successfully");
+          navigate("/raise");
+        }
       },
       onError: (e) => alert(`Save failed: ${(e as Error).message}`),
     });
   };
 
   if (isLoading) {
-    return (<Layout><p className="text-gray-500">Loading…</p></Layout>);
+    return (
+      <Layout>
+        <div className="flex justify-center py-12"><Spinner /></div>
+      </Layout>
+    );
   }
+
   if (!position) {
-    return (<Layout><p className="text-gray-500">Position not found.</p></Layout>);
+    return (
+      <Layout>
+        <div className="p-8 text-center text-slate-500">Position not found.</div>
+      </Layout>
+    );
   }
 
   const isDraft = position.status === "DRAFT";
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">Raise Position</h1>
-          <StatusBadge status={position.status} />
-        </div>
-        <button onClick={() => navigate("/raise")} className="text-sm text-gray-600 hover:underline">← Back</button>
-      </div>
+      <PageHeader
+        title="Raise Requisition"
+        subtitle={
+          position.positionType === "REPLACEMENT"
+            ? `Replacement for ${position.replacementDetails?.exEmployeeName || "Direct Report"}`
+            : "Request new headcount approval"
+        }
+        actions={
+          <div className="flex items-center gap-3">
+            <StatusBadge status={position.status} />
+            <Button variant="secondary" onClick={() => navigate("/raise")}>
+              ← Back
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="space-y-8">
-        {/* Template */}
-        <section className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Template</h2>
-          <FormField label="Template" required error={errors.mrfTemplateId}>
-            <select value={form.mrfTemplateId} onChange={(e) => onTemplateSelect(e.target.value)} disabled={!isDraft} className={inputClass}>
-              <option value="">Select a template…</option>
-              {templates?.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
-            </select>
-          </FormField>
-          {appliedTemplateId && isDraft && (
-            <button type="button" onClick={reapplyTemplate} className="mt-2 text-xs text-indigo-600 hover:underline">Re-apply template</button>
+      <div className="space-y-6 max-w-4xl">
+        {/* Template selection */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">1. MRF Template</h3>
+          <Select
+            value={form.mrfTemplateId ?? ""}
+            onChange={(e) => applyTemplate(e.target.value)}
+            disabled={!isDraft}
+            label="Template"
+          >
+            <option value="">— Choose a template (auto-fills fields) —</option>
+            {templates?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} · {t.costCentre}
+              </option>
+            ))}
+          </Select>
+        </Card>
+
+        {/* Core fields */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">2. Position details</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Input
+              label="Job title *"
+              value={form.jobTitle ?? ""}
+              onChange={(e) => set("jobTitle", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Cost centre"
+              value={form.division ?? ""}
+              onChange={(e) => set("division", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Job code"
+              value={form.jobCode ?? ""}
+              onChange={(e) => set("jobCode", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Division"
+              value={form.division ?? ""}
+              onChange={(e) => set("division", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Reporting manager"
+              value={form.reportingManager ?? ""}
+              onChange={(e) => set("reportingManager", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Location / site"
+              value={form.location ?? ""}
+              onChange={(e) => set("location", e.target.value)}
+              disabled={!isDraft}
+            />
+          </div>
+          <div className="mt-4">
+            <Textarea
+              label="Detailed JD"
+              rows={4}
+              value={form.jd ?? ""}
+              onChange={(e) => set("jd", e.target.value)}
+              disabled={!isDraft}
+            />
+          </div>
+          <div className="mt-4 grid md:grid-cols-2 gap-4">
+            <Input
+              label="Required skills (comma-separated)"
+              value={(form.requiredSkills ?? []).join(", ")}
+              onChange={(e) =>
+                set(
+                  "requiredSkills",
+                  e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                )
+              }
+              disabled={!isDraft}
+            />
+            <Input
+              label="Experience level"
+              value={form.experienceLevel ?? ""}
+              onChange={(e) => set("experienceLevel", e.target.value)}
+              disabled={!isDraft}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <Input
+              label="Salary min"
+              type="number"
+              value={form.salaryRange?.min ?? 0}
+              onChange={(e) =>
+                set("salaryRange", { ...form.salaryRange, min: +e.target.value })
+              }
+              disabled={!isDraft}
+            />
+            <Input
+              label="Salary max"
+              type="number"
+              value={form.salaryRange?.max ?? 0}
+              onChange={(e) =>
+                set("salaryRange", { ...form.salaryRange, max: +e.target.value })
+              }
+              disabled={!isDraft}
+            />
+            <Input
+              label="Currency"
+              value={form.salaryRange?.currency ?? "INR"}
+              onChange={(e) =>
+                set("salaryRange", { ...form.salaryRange, currency: e.target.value })
+              }
+              disabled={!isDraft}
+            />
+          </div>
+        </Card>
+
+        {/* Supplementary */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">3. Supplementary details</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Input
+              label="Required start date"
+              type="date"
+              value={form.requiredStartDate ?? ""}
+              onChange={(e) => set("requiredStartDate", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Shift time"
+              value={form.shiftTime ?? ""}
+              onChange={(e) => set("shiftTime", e.target.value)}
+              disabled={!isDraft}
+            />
+            <Input
+              label="Shift days (comma-separated, e.g. Mon,Tue,Wed)"
+              value={(form.shiftDays ?? []).join(",")}
+              onChange={(e) =>
+                set(
+                  "shiftDays",
+                  e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                )
+              }
+              disabled={!isDraft}
+            />
+            <Input
+              label="Identified sitting place (optional)"
+              value={form.sittingPlace ?? ""}
+              onChange={(e) => set("sittingPlace", e.target.value)}
+              disabled={!isDraft}
+            />
+          </div>
+          <div className="mt-4">
+            <Textarea
+              label="Impact on team if not filled"
+              rows={2}
+              value={form.impactIfUnfilled ?? ""}
+              onChange={(e) => set("impactIfUnfilled", e.target.value)}
+              disabled={!isDraft}
+            />
+          </div>
+        </Card>
+
+        {/* Replacement details */}
+        {position.positionType === "REPLACEMENT" && (
+          <Card className="p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">
+              4. Ex-employee details (replacement)
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Input
+                label="Ex-employee name"
+                value={form.replacementDetails?.exEmployeeName ?? ""}
+                onChange={(e) => setReplacementDetail("exEmployeeName", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Ex-employee ID"
+                value={form.replacementDetails?.exEmployeeId ?? ""}
+                onChange={(e) => setReplacementDetail("exEmployeeId", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Email"
+                value={form.replacementDetails?.exEmployeeEmail ?? ""}
+                onChange={(e) => setReplacementDetail("exEmployeeEmail", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Phone"
+                value={form.replacementDetails?.exEmployeePhone ?? ""}
+                onChange={(e) => setReplacementDetail("exEmployeePhone", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Business unit"
+                value={form.replacementDetails?.bu ?? ""}
+                onChange={(e) => setReplacementDetail("bu", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Department"
+                value={form.replacementDetails?.department ?? ""}
+                onChange={(e) => setReplacementDetail("department", e.target.value)}
+                disabled={!isDraft}
+              />
+              <Input
+                label="Last salary"
+                type="number"
+                value={form.replacementDetails?.lastSalary ?? 0}
+                onChange={(e) => setReplacementDetail("lastSalary", +e.target.value)}
+                disabled={!isDraft}
+              />
+              <Select
+                label="Colour code (departure reason)"
+                value={form.replacementDetails?.colourCode ?? "GREEN"}
+                onChange={(e) => setReplacementDetail("colourCode", e.target.value)}
+                disabled={!isDraft}
+              >
+                <option value="GREEN">GREEN — Voluntary / Good Standing</option>
+                <option value="RED">RED — Performance</option>
+                <option value="BLACK">BLACK — Misconduct / Involuntary</option>
+              </Select>
+            </div>
+            <div className="mt-4">
+              <Textarea
+                label="Reason for leaving"
+                rows={2}
+                value={form.replacementDetails?.reasonForLeaving ?? ""}
+                onChange={(e) => setReplacementDetail("reasonForLeaving", e.target.value)}
+                disabled={!isDraft}
+              />
+            </div>
+          </Card>
+        )}
+
+        {/* Approval routing */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">
+            {position.positionType === "REPLACEMENT" ? "5" : "4"}. Approval routing
+          </h3>
+          <label className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={!!form.approvalSkipped}
+              onChange={(e) => set("approvalSkipped", e.target.checked)}
+              disabled={!isDraft}
+              className="rounded border-slate-350 text-brand-600 focus:ring-brand-500"
+            />
+            Approval not required (skip — log with reason)
+          </label>
+          {form.approvalSkipped ? (
+            <Textarea
+              label="Reason for skipping approval"
+              rows={2}
+              value={form.approvalSkippedReason ?? ""}
+              onChange={(e) => set("approvalSkippedReason", e.target.value)}
+              disabled={!isDraft}
+            />
+          ) : (
+            <Select
+              label="Reviewer (Delegation of Authority)"
+              value={form.reviewerId ?? ""}
+              onChange={(e) => set("reviewerId", e.target.value)}
+              disabled={!isDraft}
+            >
+              <option value="">— Select reviewer —</option>
+              {doa?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} — {d.title}
+                </option>
+              ))}
+            </Select>
           )}
-        </section>
+        </Card>
 
-        {/* Position Details */}
-        <section className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-            Position Details <span className="text-gray-400">(auto-filled from template, editable)</span>
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Job Title" required error={errors.jobTitle}>
-              <input value={form.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <FormField label="Job Code" required error={errors.jobCode}>
-              <input value={form.jobCode} onChange={(e) => set("jobCode", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <FormField label="Division" required error={errors.division}>
-              <input value={form.division} onChange={(e) => set("division", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <FormField label="Reporting Manager">
-              <input value={form.reportingManager} onChange={(e) => set("reportingManager", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <div className="col-span-2">
-              <FormField label="Job Description" required error={errors.jd}>
-                <textarea value={form.jd} onChange={(e) => set("jd", e.target.value)} disabled={!isDraft} rows={4} className={inputClass} />
-              </FormField>
-            </div>
-            <div className="col-span-2">
-              <FormField label="Required Skills" required error={errors.requiredSkills}>
-                <TagInput values={form.requiredSkills} onChange={(v) => set("requiredSkills", v)} placeholder={isDraft ? "Type a skill and press Enter" : undefined} />
-              </FormField>
-            </div>
-            <FormField label="Salary Min (INR)" required error={errors.salaryMin}>
-              <input type="number" value={form.salaryMin} onChange={(e) => set("salaryMin", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <FormField label="Salary Max (INR)">
-              <input type="number" value={form.salaryMax} onChange={(e) => set("salaryMax", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-          </div>
-        </section>
-
-        {/* Replacement Details (only for REPLACEMENT positions) */}
-        {position?.positionType === "REPLACEMENT" && (
-          <section className="rounded-lg border border-rose-200 bg-rose-50/30 p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-rose-700">
-              Replacement Personnel Details
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Ex-Employee Name" required error={errors.exEmployeeName}>
-                <input value={form.exEmployeeName} onChange={(e) => set("exEmployeeName", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Ex-Employee ID" required error={errors.exEmployeeId}>
-                <input value={form.exEmployeeId} onChange={(e) => set("exEmployeeId", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Ex-Employee Email" required error={errors.exEmployeeEmail}>
-                <input value={form.exEmployeeEmail} onChange={(e) => set("exEmployeeEmail", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Ex-Employee Phone" required error={errors.exEmployeePhone}>
-                <input value={form.exEmployeePhone} onChange={(e) => set("exEmployeePhone", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Business Unit (BU)" required error={errors.bu}>
-                <input value={form.bu} onChange={(e) => set("bu", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Department" required error={errors.department}>
-                <input value={form.department} onChange={(e) => set("department", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Last Salary (INR)" required error={errors.lastSalary}>
-                <input type="number" value={form.lastSalary} onChange={(e) => set("lastSalary", e.target.value)} disabled={!isDraft} className={inputClass} />
-              </FormField>
-              <FormField label="Colour Code" required error={errors.colourCode}>
-                <select value={form.colourCode} onChange={(e) => set("colourCode", e.target.value)} disabled={!isDraft} className={inputClass}>
-                  <option value="">Select…</option>
-                  <option value="GREEN">GREEN — Voluntary / Good Standing</option>
-                  <option value="RED">RED — Performance</option>
-                  <option value="BLACK">BLACK — Misconduct / Involuntary</option>
-                </select>
-              </FormField>
-              <div className="col-span-2">
-                <FormField label="Reason for Leaving">
-                  <textarea value={form.reasonForLeaving} onChange={(e) => set("reasonForLeaving", e.target.value)} disabled={!isDraft} rows={2} className={inputClass} />
-                </FormField>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Supplementary Details */}
-        <section className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Supplementary Details</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Required Start Date" required error={errors.requiredStartDate}>
-              <input type="date" value={form.requiredStartDate} onChange={(e) => set("requiredStartDate", e.target.value)} disabled={!isDraft} className={inputClass} />
-            </FormField>
-            <FormField label="Location" required error={errors.location}>
-              <select value={form.location} onChange={(e) => set("location", e.target.value)} disabled={!isDraft} className={inputClass}>
-                <option value="">Select…</option>
-                {LOCATIONS.map((l) => (<option key={l} value={l}>{l}</option>))}
-              </select>
-            </FormField>
-            <FormField label="Experience Level" required error={errors.experienceLevel}>
-              <select value={form.experienceLevel} onChange={(e) => set("experienceLevel", e.target.value)} disabled={!isDraft} className={inputClass}>
-                <option value="">Select…</option>
-                {EXPERIENCE_LEVELS.map((l) => (<option key={l} value={l}>{l}</option>))}
-              </select>
-            </FormField>
-            <FormField label="Shift Time" required error={errors.shiftTime}>
-              <input value={form.shiftTime} onChange={(e) => set("shiftTime", e.target.value)} disabled={!isDraft} placeholder="e.g. 09:00-18:00" className={inputClass} />
-            </FormField>
-            <div className="col-span-2">
-              <FormField label="Shift Days" required error={errors.shiftDays}>
-                <div className="flex flex-wrap gap-2">
-                  {SHIFT_DAYS.map((d) => {
-                    const active = form.shiftDays.includes(d);
-                    return (
-                      <button key={d} type="button" disabled={!isDraft}
-                        onClick={() => set("shiftDays", active ? form.shiftDays.filter((x) => x !== d) : [...form.shiftDays, d])}
-                        className={`rounded-full border px-3 py-1 text-sm ${active ? "border-indigo-600 bg-indigo-600 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-100"} ${!isDraft ? "opacity-60" : ""}`}
-                      >{d}</button>
-                    );
-                  })}
-                </div>
-              </FormField>
-            </div>
-            <FormField label="Sitting Place">
-              <input value={form.sittingPlace} onChange={(e) => set("sittingPlace", e.target.value)} disabled={!isDraft} placeholder="e.g. Bay-12, Floor 3" className={inputClass} />
-            </FormField>
-            <div className="col-span-2">
-              <FormField label="Impact if Unfilled" required error={errors.impactIfUnfilled}>
-                <textarea value={form.impactIfUnfilled} onChange={(e) => set("impactIfUnfilled", e.target.value)} disabled={!isDraft} rows={3} className={inputClass} />
-              </FormField>
-            </div>
-          </div>
-        </section>
-
-        {isDraft && (
+        {isDraft ? (
           <div className="flex justify-end gap-3">
-            <button onClick={handleSaveDraft} disabled={updateDraft.isPending}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50">
-              {updateDraft.isPending ? "Saving…" : "Save Draft"}
-            </button>
-            <button onClick={handleSubmit} disabled={updateDraft.isPending || submitPosition.isPending}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-              {submitPosition.isPending ? "Submitting…" : "Submit for Approval"}
-            </button>
+            <Button variant="secondary" onClick={() => save(false)}>
+              Save as draft
+            </Button>
+            <Button variant="primary" onClick={() => save(true)}>
+              Submit for approval
+            </Button>
           </div>
-        )}
-
-        {!isDraft && (
-          <p className="text-center text-sm text-gray-500">This position has been submitted and is no longer editable.</p>
+        ) : (
+          <p className="text-center text-sm text-slate-500 font-medium py-4">
+            This position has been submitted and is no longer editable.
+          </p>
         )}
       </div>
     </Layout>

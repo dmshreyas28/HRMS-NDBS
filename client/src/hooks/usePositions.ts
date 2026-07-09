@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./useApi";
-import { listPositions, getPosition, getAuditTrail, createPosition, updatePosition, submitPosition, approvePosition, rejectPosition, type CreatePositionInput, type UpdatePositionInput } from "../api/positions";
+import { listPositions, getPosition, getAuditTrail, createPosition, deletePosition, updatePosition, submitPosition, approvePosition, rejectPosition, type CreatePositionInput, type UpdatePositionInput } from "../api/positions";
 import type { PositionStatus } from "../types/models";
 
 export function usePositions(status?: PositionStatus) {
@@ -18,6 +18,11 @@ export function useAuditTrail(id: string | undefined) {
 export function useCreateDraft() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (input: CreatePositionInput) => createPosition(input), onSuccess: () => { qc.invalidateQueries({ queryKey: ["positions"] }); } });
+}
+
+export function useDeleteDraft() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: deletePosition, onSuccess: () => { qc.invalidateQueries({ queryKey: ["positions"] }); } });
 }
 
 export function useUpdateDraft(id: string) {

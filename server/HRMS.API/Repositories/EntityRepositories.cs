@@ -1,14 +1,24 @@
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 using MongoDB.Driver;
 using HRMS.API.Models;
 using HRMS.API.Services;
 
 namespace HRMS.API.Repositories
 {
+    public class CandidateStageCount
+    {
+        public string PositionId { get; set; } = null!;
+        public string Stage { get; set; } = null!;
+        public int Count { get; set; }
+    }
+
     // USER REPOSITORY
     public interface IUserRepository : IRepository<User>
     {
         Task<User?> GetByAuth0IdAsync(string auth0Id);
+        Task<System.Collections.Generic.Dictionary<string, int>> GetUsersRoleBreakdownAsync();
     }
 
     public class UserRepository : MongoRepository<User>, IUserRepository
@@ -21,12 +31,30 @@ namespace HRMS.API.Repositories
         {
             return await _collection.Find(u => u.Auth0Id == auth0Id).FirstOrDefaultAsync();
         }
+
+        public async Task<System.Collections.Generic.Dictionary<string, int>> GetUsersRoleBreakdownAsync()
+        {
+            var aggregation = await _collection.Aggregate()
+                .Group(
+                    u => u.Role,
+                    g => new { Role = g.Key, Count = g.Count() }
+                )
+                .ToListAsync();
+
+            var result = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var group in aggregation)
+            {
+                result[group.Role.ToString()] = group.Count;
+            }
+            return result;
+        }
     }
 
     // POSITION REPOSITORY
     public interface IPositionRepository : IRepository<Position>
     {
         Task<System.Collections.Generic.Dictionary<string, int>> GetStatusBreakdownAsync();
+        Task<System.Collections.Generic.Dictionary<string, int>> GetHmStatusBreakdownAsync(string hmUserId);
     }
 
     public class PositionRepository : MongoRepository<Position>, IPositionRepository
@@ -51,17 +79,53 @@ namespace HRMS.API.Repositories
             }
             return result;
         }
+
+        public async Task<System.Collections.Generic.Dictionary<string, int>> GetHmStatusBreakdownAsync(string hmUserId)
+        {
+            var aggregation = await _collection.Aggregate()
+                .Match(p => p.RaisedBy == hmUserId)
+                .Group(
+                    p => p.Status,
+                    g => new { Status = g.Key, Count = g.Count() }
+                )
+                .ToListAsync();
+
+            var result = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var group in aggregation)
+            {
+                result[group.Status.ToString()] = group.Count;
+            }
+            return result;
+        }
     }
 
     // CANDIDATE REPOSITORY
     public interface ICandidateRepository : IRepository<Candidate>
     {
+        Task<System.Collections.Generic.List<CandidateStageCount>> GetStageCountsGroupedByPositionAsync();
     }
 
     public class CandidateRepository : MongoRepository<Candidate>, ICandidateRepository
     {
         public CandidateRepository(MongoDbService dbService) : base(dbService, "candidates")
         {
+        }
+
+        public async Task<System.Collections.Generic.List<CandidateStageCount>> GetStageCountsGroupedByPositionAsync()
+        {
+            var aggregation = await _collection.Aggregate()
+                .Group(
+                    c => new { c.PositionId, c.CurrentStage },
+                    g => new { Key = g.Key, Count = g.Count() }
+                )
+                .ToListAsync();
+
+            return aggregation.Select(a => new CandidateStageCount
+            {
+                PositionId = a.Key.PositionId,
+                Stage = a.Key.CurrentStage.ToString(),
+                Count = a.Count
+            }).ToList();
         }
     }
 

@@ -44,39 +44,46 @@ namespace HRMS.API.Controllers
         {
             var userId = await GetCurrentMongoUserIdAsync(_userRepo);
 
-            // Fetch positions raised by this HM
-            var myPositions = await _positionRepo.FindAsync(p => p.RaisedBy == userId);
+            var rawCounts = await _positionRepo.GetHmStatusBreakdownAsync(userId);
+            var counts = new Dictionary<string, int>
+            {
+                { "draft", rawCounts.GetValueOrDefault("DRAFT", 0) },
+                { "pending", rawCounts.GetValueOrDefault("PENDING_APPROVAL", 0) },
+                { "approved", rawCounts.GetValueOrDefault("APPROVED", 0) },
+                { "posted", rawCounts.GetValueOrDefault("POSTED", 0) },
+                { "onHold", rawCounts.GetValueOrDefault("ON_HOLD", 0) },
+                { "filled", rawCounts.GetValueOrDefault("FILLED", 0) },
+                { "collapsed", rawCounts.GetValueOrDefault("COLLAPSED", 0) }
+            };
 
-            var activeCount = myPositions.Count(p => p.Status == PositionStatus.APPROVED || p.Status == PositionStatus.POSTED || p.Status == PositionStatus.ON_HOLD);
-            var pendingApprovalCount = myPositions.Count(p => p.Status == PositionStatus.PENDING_APPROVAL);
-            var draftCount = myPositions.Count(p => p.Status == PositionStatus.DRAFT);
+            // awaitingMyAction: drafts and rejected positions for this HM
+            var awaitingMyAction = await _positionRepo.FindAsync(p => 
+                p.RaisedBy == userId && 
+                (p.Status == PositionStatus.DRAFT || p.Status == PositionStatus.REJECTED));
 
-            // Inactivity Warnings (older than 150 days, and not closed/rejected/collapsed)
-            var warningThreshold = DateTime.UtcNow.AddDays(-150);
-            var warningCount = myPositions.Count(p => 
-                p.Status != PositionStatus.FILLED && 
-                p.Status != PositionStatus.COLLAPSED && 
-                p.Status != PositionStatus.REJECTED && 
-                p.LastHMActionAt < warningThreshold);
+            // onHold details:
+            var heldPositions = await _positionRepo.FindAsync(p => 
+                p.RaisedBy == userId && 
+                p.Status == PositionStatus.ON_HOLD);
+            var onHoldList = heldPositions.Select(p => new
+            {
+                id = p.Id,
+                jobTitle = p.JobTitle,
+                daysRemaining = p.OnHold.ExpiresAt.HasValue ? Math.Max(0, (int)Math.Ceiling((p.OnHold.ExpiresAt.Value - DateTime.UtcNow).TotalDays)) : 0
+            }).ToList();
 
-            // Resignations pending action of direct reports
-            var pendingResignations = await _resignationRepo.FindAsync(r => r.ManagerId == userId && r.Status == "PENDING_ACTION");
-
-            // Build recent activities (last 5 audit entries across all my positions)
-            var recentActivities = myPositions
-                .SelectMany(p => p.AuditLog.Select(a => new { p.JobTitle, p.JobCode, Audit = a }))
-                .OrderByDescending(a => a.Audit.Timestamp)
-                .Take(5)
-                .ToList();
+            // openPositions: this HM's non-draft, non-collapsed positions
+            var openPositions = await _positionRepo.FindAsync(p => 
+                p.RaisedBy == userId && 
+                p.Status != PositionStatus.DRAFT && 
+                p.Status != PositionStatus.COLLAPSED);
 
             var data = new
             {
-                ActivePositions = activeCount,
-                PendingApprovals = pendingApprovalCount,
-                Drafts = draftCount,
-                InactivityWarnings = warningCount,
-                PendingResignations = pendingResignations.Count,
-                RecentActivities = recentActivities
+                counts = counts,
+                awaitingMyAction = awaitingMyAction,
+                onHold = onHoldList,
+                openPositions = openPositions
             };
 
             return Ok(ApiResponse<object>.Ok(data));
@@ -86,26 +93,37 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "TAOnly")]
         public async Task<IActionResult> GetTaDashboard()
         {
-            // TA Dashboard sees all positions except drafts
-            var allActivePositions = await _positionRepo.FindAsync(p => p.Status != PositionStatus.DRAFT);
-            
-            var approvedNotPostedCount = allActivePositions.Count(p => p.Status == PositionStatus.APPROVED && p.JobPostedAt == null);
-            var postedCount = allActivePositions.Count(p => p.Status == PositionStatus.POSTED);
-            var holdCount = allActivePositions.Count(p => p.Status == PositionStatus.ON_HOLD);
-            var pendingApprovalCount = allActivePositions.Count(p => p.Status == PositionStatus.PENDING_APPROVAL);
+            var notYetPosted = await _positionRepo.FindAsync(p => p.Status == PositionStatus.APPROVED && p.JobPostedAt == null);
+            var pendingApprovals = await _positionRepo.FindAsync(p => p.Status == PositionStatus.PENDING_APPROVAL);
 
-            // Fetch candidates
-            var allCandidates = await _candidateRepo.GetAllAsync();
-            var hiredThisMonthCount = allCandidates.Count(c => c.CurrentStage == CandidateStage.HIRED && c.UpdatedAt > DateTime.UtcNow.AddDays(-30));
+            var postedPositions = await _positionRepo.FindAsync(p => p.Status == PositionStatus.POSTED);
+
+            var stageCounts = await _candidateRepo.GetStageCountsGroupedByPositionAsync();
+            var stageCountsByPosition = stageCounts
+                .GroupBy(sc => sc.PositionId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var pipelineSummaries = new List<object>();
+            foreach (var p in postedPositions)
+            {
+                var countsForPos = stageCountsByPosition.GetValueOrDefault(p.Id!, new List<CandidateStageCount>());
+                var total = countsForPos.Sum(c => c.Count);
+                var byStage = countsForPos.ToDictionary(c => c.Stage, c => c.Count);
+
+                pipelineSummaries.Add(new
+                {
+                    id = p.Id,
+                    jobTitle = p.JobTitle,
+                    total = total,
+                    byStage = byStage
+                });
+            }
 
             var data = new
             {
-                ApprovedNotPosted = approvedNotPostedCount,
-                PostedPositions = postedCount,
-                OnHoldPositions = holdCount,
-                PendingApprovals = pendingApprovalCount,
-                HiredThisMonth = hiredThisMonthCount,
-                TotalCandidates = allCandidates.Count
+                notYetPosted = notYetPosted,
+                pendingApprovals = pendingApprovals,
+                pipelineSummaries = pipelineSummaries
             };
 
             return Ok(ApiResponse<object>.Ok(data));
@@ -117,28 +135,43 @@ namespace HRMS.API.Controllers
         {
             var totalPositions = await _positionRepo.CountAsync();
             var totalUsers = await _userRepo.CountAsync();
-            var totalCostCentres = await _costCentreRepo.CountAsync();
-            var totalTemplates = await _mrfTemplateRepo.CountAsync();
 
-            // Get status counts from aggregation
-            var statusCounts = await _positionRepo.GetStatusBreakdownAsync();
+            // approachingCollapse: (DateTime.UtcNow - LastHMActionAt).TotalDays >= 150, and not filled/collapsed/rejected
+            var thresholdDate = DateTime.UtcNow.AddDays(-150);
+            var inactivePositions = await _positionRepo.FindAsync(p =>
+                p.Status != PositionStatus.FILLED &&
+                p.Status != PositionStatus.COLLAPSED &&
+                p.Status != PositionStatus.REJECTED &&
+                p.LastHMActionAt <= thresholdDate);
 
-            // Ensure all statuses exist in the dictionary
-            foreach (var status in Enum.GetNames(typeof(PositionStatus)))
+            var approachingCollapse = inactivePositions.Select(p => new
             {
-                if (!statusCounts.ContainsKey(status))
-                {
-                    statusCounts[status] = 0;
-                }
+                id = p.Id,
+                jobTitle = p.JobTitle,
+                daysSince = (int)(DateTime.UtcNow - p.LastHMActionAt).TotalDays
+            }).ToList();
+
+            var rawStatus = await _positionRepo.GetStatusBreakdownAsync();
+            var byStatus = new Dictionary<string, int>();
+            foreach (var statusName in Enum.GetNames(typeof(PositionStatus)))
+            {
+                byStatus[statusName] = rawStatus.GetValueOrDefault(statusName, 0);
+            }
+
+            var rawRoles = await _userRepo.GetUsersRoleBreakdownAsync();
+            var usersByRole = new Dictionary<string, int>();
+            foreach (var roleName in Enum.GetNames(typeof(UserRole)))
+            {
+                usersByRole[roleName] = rawRoles.GetValueOrDefault(roleName, 0);
             }
 
             var data = new
             {
-                TotalPositions = totalPositions,
-                TotalUsers = totalUsers,
-                TotalCostCentres = totalCostCentres,
-                TotalTemplates = totalTemplates,
-                StatusBreakdown = statusCounts
+                totalPositions = totalPositions,
+                totalUsers = totalUsers,
+                approachingCollapse = approachingCollapse,
+                byStatus = byStatus,
+                usersByRole = usersByRole
             };
 
             return Ok(ApiResponse<object>.Ok(data));

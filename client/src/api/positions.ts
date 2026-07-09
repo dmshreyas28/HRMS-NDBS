@@ -26,6 +26,7 @@ export interface UpdatePositionInput {
   experienceLevel: string; impactIfUnfilled: string; sittingPlace: string;
   reviewerId?: string | null; replacementDetails?: unknown;
 }
+export function deletePosition(id: string): Promise<void> { return api.delete<void>(`/api/positions/${id}`); }
 export function updatePosition(id: string, input: UpdatePositionInput): Promise<Position> { return api.patch<Position>(`/api/positions/${id}`, input); }
 export function submitPosition(id: string, input: { reviewerId?: string | null; approvalSkipped: boolean; approvalSkippedReason?: string | null }): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/submit`, input); }
 export function approvePosition(id: string, notes: string): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/approve`, { notes }); }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
@@ -85,6 +86,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Add Authentication and Authorization
+builder.Services.AddScoped<IClaimsTransformation, ClaimsTransformation>();
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -110,7 +112,7 @@ builder.Services.AddAuthorization(options =>
         ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" && c.Value.Equals("admin", StringComparison.OrdinalIgnoreCase))));
     options.AddPolicy("HMOrTA", p => p.RequireAssertion(ctx =>
         ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" &&
-            (c.Value.Equals("hm", StringComparison.OrdinalIgnoreCase) || c.Value.Equals("hr_ta", StringComparison.OrdinalIgnoreCase)))));
+            (c.Value.Equals("hm", StringComparison.OrdinalIgnoreCase) || c.Value.Equals("hr_ta", StringComparison.OrdinalIgnoreCase) || c.Value.Equals("admin", StringComparison.OrdinalIgnoreCase)))));
 });
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
