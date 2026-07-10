@@ -94,4 +94,16 @@ namespace HRMS.API.Repositories
         {
         }
     }
+
+    // RESIGNATION REPOSITORY
+    public interface IResignationRepository : IRepository<Resignation>
+    {
+    }
+
+    public class ResignationRepository : MongoRepository<Resignation>, IResignationRepository
+    {
+        public ResignationRepository(MongoDbService dbService) : base(dbService, "resignations")
+        {
+        }
+    }
 }
