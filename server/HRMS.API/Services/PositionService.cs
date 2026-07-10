@@ -11,7 +11,7 @@ namespace HRMS.API.Services
     public interface IPositionService
     {
         Task<Position> GetByIdAsync(string id);
-        Task<List<Position>> GetAllAsync(string userId, UserRole role);
+        Task<List<Position>> GetAllAsync(string userId, UserRole role, PositionStatus? statusFilter = null);
         Task<Position> CreatePositionAsync(CreatePositionRequest request, string raisedByUserId);
         Task<Position> UpdatePositionAsync(string id, UpdatePositionRequest request, string actorUserId);
         Task<Position> SubmitForApprovalAsync(string id, SubmitPositionRequest request, string actorUserId);
@@ -47,20 +47,28 @@ namespace HRMS.API.Services
             return position;
         }
 
-        public async Task<List<Position>> GetAllAsync(string userId, UserRole role)
+        public async Task<List<Position>> GetAllAsync(string userId, UserRole role, PositionStatus? statusFilter = null)
         {
+            List<Position> positions;
             if (role == UserRole.Admin)
             {
-                return await _positionRepo.GetAllAsync();
+                positions = await _positionRepo.GetAllAsync();
             }
             else if (role == UserRole.HR_TA)
             {
-                return await _positionRepo.FindAsync(p => p.Status != PositionStatus.DRAFT);
+                positions = await _positionRepo.FindAsync(p => p.Status != PositionStatus.DRAFT);
             }
             else
             {
-                return await _positionRepo.FindAsync(p => p.RaisedBy == userId || p.ReviewerId == userId);
+                positions = await _positionRepo.FindAsync(p => p.RaisedBy == userId || p.ReviewerId == userId);
             }
+
+            if (statusFilter.HasValue)
+            {
+                positions = positions.Where(p => p.Status == statusFilter.Value).ToList();
+            }
+
+            return positions;
         }
 
         public async Task<Position> CreatePositionAsync(CreatePositionRequest request, string raisedByUserId)
@@ -70,7 +78,7 @@ namespace HRMS.API.Services
                 PositionType = request.PositionType,
                 Status = PositionStatus.DRAFT,
                 CostCentre = request.CostCentre,
-                JobCode = request.JobCode,
+                JobCode = string.IsNullOrWhiteSpace(request.JobCode) ? GenerateJobCode(request.CostCentre) : request.JobCode,
                 Division = request.Division,
                 JobTitle = request.JobTitle,
                 ReportingManager = request.ReportingManager,
@@ -432,6 +440,18 @@ namespace HRMS.API.Services
 
             await _positionRepo.UpdateAsync(id, position);
             return position;
+        }
+
+        private static string GenerateJobCode(string costCentre)
+        {
+            const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            var random = new Random();
+            var code = new char[6];
+            for (int i = 0; i < 6; i++)
+            {
+                code[i] = chars[random.Next(chars.Length)];
+            }
+            return $"POS-{costCentre}-{new string(code)}";
         }
     }
 }
