@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,9 +23,14 @@ namespace HRMS.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] string? costCentre)
         {
             var templates = await _mrfTemplateRepo.GetAllAsync();
+            templates = templates.Where(t => t.IsActive == true).ToList();
+            if (!string.IsNullOrWhiteSpace(costCentre))
+            {
+                templates = templates.Where(t => t.CostCentre == costCentre).ToList();
+            }
             return Ok(ApiResponse<List<MrfTemplate>>.Ok(templates));
         }
 
