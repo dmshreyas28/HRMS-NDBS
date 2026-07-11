@@ -20,7 +20,6 @@ import { AdminCostCentresPage } from "./pages/admin/AdminCostCentresPage";
 import { AdminDoaPage } from "./pages/admin/AdminDoaPage";
 import { AdminPositionsPage } from "./pages/admin/AdminPositionsPage";
 import { ToastContainer } from "./components/ToastContainer";
-import "./App.css";
 
 const queryClient = new QueryClient();
 
