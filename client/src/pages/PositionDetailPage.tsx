@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "../components/Layout";
-import { getPosition, approvePosition, rejectPosition, holdPosition, releaseHoldPosition, postJob } from "../api/positions";
+import {
+  getPosition,
+  approvePosition,
+  rejectPosition,
+  holdPosition,
+  releaseHoldPosition,
+  postJob,
+  saveReviewerEmailDraft,
+  sendReviewerEmail,
+} from "../api/positions";
 import { StatusBadge } from "../components/StatusBadge";
 import { AuditTrail } from "../components/AuditTrail";
 import { useAuthStore } from "../store/authStore";
@@ -68,6 +77,32 @@ export function PositionDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["position", id] });
     },
     onError: (e) => alert(`Job posting failed: ${(e as Error).message}`),
+  });
+
+  const [emailDraftText, setEmailDraftText] = useState("");
+
+  useEffect(() => {
+    if (pos?.reviewerEmailDraft && !emailDraftText) {
+      setEmailDraftText(pos.reviewerEmailDraft);
+    }
+  }, [pos?.reviewerEmailDraft, emailDraftText]);
+
+  const saveDraftMutation = useMutation({
+    mutationFn: (draftText: string) => saveReviewerEmailDraft(pos!.id, draftText),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["position", id] });
+      alert("Email draft saved successfully.");
+    },
+    onError: (e) => alert(`Failed to save draft: ${(e as Error).message}`),
+  });
+
+  const sendEmailMutation = useMutation({
+    mutationFn: () => sendReviewerEmail(pos!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["position", id] });
+      alert("Email sent to reviewer.");
+    },
+    onError: (e) => alert(`Failed to send email: ${(e as Error).message}`),
   });
 
   if (isLoading) {
@@ -287,6 +322,40 @@ export function PositionDetailPage() {
                     {(pos.replacementDetails as any).colourCode}
                   </span>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {/* Reviewer Email Draft (only for HR/TA and Admin when PENDING_APPROVAL) */}
+          {(isTa || isAdmin) && pos.status === "PENDING_APPROVAL" && (
+            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm mt-6">
+              <h2 className="text-base font-bold text-slate-900 border-b pb-3 mb-4 flex items-center gap-2">
+                <span>✉️ Reviewer Email Draft</span>
+              </h2>
+              <p className="text-xs text-slate-400 mb-3">Auto-generated draft. Please review and edit before sending to the reviewer.</p>
+              <textarea
+                value={emailDraftText}
+                onChange={(e) => setEmailDraftText(e.target.value)}
+                rows={10}
+                className="w-full rounded-lg border border-slate-200 p-3 text-xs font-mono text-slate-700 bg-slate-50/30 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 leading-relaxed"
+              />
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => saveDraftMutation.mutate(emailDraftText)}
+                  disabled={saveDraftMutation.isPending}
+                  className="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 transition-all disabled:opacity-50"
+                >
+                  {saveDraftMutation.isPending ? "Saving..." : "Save Draft"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sendEmailMutation.mutate()}
+                  disabled={sendEmailMutation.isPending}
+                  className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white transition-all disabled:opacity-50 shadow-md shadow-indigo-600/10"
+                >
+                  {sendEmailMutation.isPending ? "Sending..." : "Send to Reviewer"}
+                </button>
               </div>
             </section>
           )}

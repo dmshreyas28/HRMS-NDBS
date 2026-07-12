@@ -13,5 +13,7 @@ namespace HRMS.API.Repositories
         Task CreateAsync(T entity);
         Task UpdateAsync(string id, T entity);
         Task DeleteAsync(string id);
+        Task<long> CountAsync();
+        Task<long> CountAsync(Expression<Func<T, bool>> filterExpression);
     }
 }

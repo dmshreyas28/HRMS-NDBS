@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useAuthStore } from "../store/authStore";
 import { Link, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { listNotifications } from "../api/notifications";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { listNotifications, markAsRead, markAllAsRead } from "../api/notifications";
 import type { ReactNode } from "react";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -10,6 +11,19 @@ export function Layout({ children }: { children: ReactNode }) {
   const dbUser = useAuthStore((s) => s.user);
   const roleLabel = dbUser?.role ?? "—";
   const location = useLocation();
+
+  const [showDropdown, setShowDropdown] = useState(false);
+  const queryClient = useQueryClient();
+
+  const markReadMutation = useMutation({
+    mutationFn: markAsRead,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: markAllAsRead,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
 
   // Polling notifications for real-time unread badge updates
   const { data: notifications } = useQuery({
@@ -97,6 +111,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   </svg>
                   Users
                 </Link>
+                <Link to="/admin/positions" className={linkClass("/admin/positions")}>
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                  Positions Oversight
+                </Link>
                 <Link to="/admin/templates" className={linkClass("/admin/templates")}>
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -156,18 +176,91 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Quick action notification indicator */}
-            <Link to="/notifications" className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                </span>
+            {/* Quick action notification indicator with Dropdown Popover */}
+            <div className="relative">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                )}
+              </button>
+
+              {showDropdown && (
+                <>
+                  {/* Backdrop click closer */}
+                  <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+                  
+                  {/* Dropdown Card */}
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden divide-y divide-slate-100">
+                    <div className="px-4 py-3 flex items-center justify-between bg-slate-50">
+                      <span className="font-bold text-xs text-slate-800 uppercase tracking-wide">Notifications</span>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={() => {
+                            markAllReadMutation.mutate();
+                            setShowDropdown(false);
+                          }}
+                          className="text-[10px] font-bold text-indigo-600 hover:underline"
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
+                      {(notifications?.slice(0, 5) ?? []).length > 0 ? (
+                        (notifications?.slice(0, 5) ?? []).map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              if (!n.isRead) markReadMutation.mutate(n.id);
+                              setShowDropdown(false);
+                            }}
+                            className={`p-3 text-xs leading-normal hover:bg-slate-50 cursor-pointer transition-colors ${
+                              !n.isRead ? "bg-indigo-50/30 font-semibold text-slate-900" : "text-slate-600"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              {!n.isRead && (
+                                <span className="h-2 w-2 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                              )}
+                              <div className="flex-1">
+                                <p>{n.message}</p>
+                                <span className="text-[10px] text-slate-400 block mt-1.5 font-medium">
+                                  {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(n.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                          No notifications found.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="px-4 py-2 bg-slate-50 text-center">
+                      <Link
+                        to="/notifications"
+                        onClick={() => setShowDropdown(false)}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline block w-full"
+                      >
+                        View all inbox notifications
+                      </Link>
+                    </div>
+                  </div>
+                </>
               )}
-            </Link>
+            </div>
           </div>
         </header>
 

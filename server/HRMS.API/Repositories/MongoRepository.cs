@@ -48,5 +48,15 @@ namespace HRMS.API.Repositories
             var filter = Builders<T>.Filter.Eq("Id", id);
             await _collection.DeleteOneAsync(filter);
         }
+
+        public virtual async Task<long> CountAsync()
+        {
+            return await _collection.CountDocumentsAsync(_ => true);
+        }
+
+        public virtual async Task<long> CountAsync(Expression<Func<T, bool>> filterExpression)
+        {
+            return await _collection.CountDocumentsAsync(filterExpression);
+        }
     }
 }

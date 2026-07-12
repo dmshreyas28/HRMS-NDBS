@@ -26,12 +26,30 @@ namespace HRMS.API.Repositories
     // POSITION REPOSITORY
     public interface IPositionRepository : IRepository<Position>
     {
+        Task<System.Collections.Generic.Dictionary<string, int>> GetStatusBreakdownAsync();
     }
 
     public class PositionRepository : MongoRepository<Position>, IPositionRepository
     {
         public PositionRepository(MongoDbService dbService) : base(dbService, "positions")
         {
+        }
+
+        public async Task<System.Collections.Generic.Dictionary<string, int>> GetStatusBreakdownAsync()
+        {
+            var aggregation = await _collection.Aggregate()
+                .Group(
+                    p => p.Status,
+                    g => new { Status = g.Key, Count = g.Count() }
+                )
+                .ToListAsync();
+
+            var result = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var group in aggregation)
+            {
+                result[group.Status.ToString()] = group.Count;
+            }
+            return result;
         }
     }
 

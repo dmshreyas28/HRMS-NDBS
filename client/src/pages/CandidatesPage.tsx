@@ -180,6 +180,17 @@ export function CandidatesPage() {
     }
   };
 
+  const handleDragStart = (e: React.DragEvent, candidateId: string) => {
+    e.dataTransfer.setData("text/plain", candidateId);
+  };
+
+  const handleDrop = (e: React.DragEvent, stageId: string) => {
+    const candidateId = e.dataTransfer.getData("text/plain");
+    if (candidateId) {
+      stageMutation.mutate({ candidateId, stage: stageId, notes: "Moved via Kanban drag-and-drop." });
+    }
+  };
+
   return (
     <Layout>
       <div className="mb-6 flex items-center justify-between border-b pb-4">
@@ -212,7 +223,12 @@ export function CandidatesPage() {
           {STAGES.map((stage) => {
             const list = candidates?.filter((c) => c.currentStage === stage.id) ?? [];
             return (
-              <div key={stage.id} className="min-w-[180px] bg-slate-100/50 rounded-xl p-3 border border-slate-200/80 flex flex-col h-[500px]">
+              <div
+                key={stage.id}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, stage.id)}
+                className="min-w-[180px] bg-slate-100/50 rounded-xl p-3 border border-slate-200/80 flex flex-col h-[500px] hover:bg-slate-100 transition-colors"
+              >
                 <div className="flex items-center justify-between mb-3 border-b pb-2">
                   <span className="text-xs font-bold text-slate-600 tracking-wide uppercase truncate">{stage.label}</span>
                   <span className="rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold h-5 w-5 flex items-center justify-center shrink-0">
@@ -224,13 +240,15 @@ export function CandidatesPage() {
                   {list.map((c) => (
                     <div
                       key={c.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, c.id)}
                       onClick={() => {
                         setSelectedCandidate(c);
                         setOfferSalary(c.offer?.salary ? String(c.offer.salary) : "");
                         setOfferStartDate(c.offer?.startDate ? c.offer.startDate.substring(0, 10) : "");
                         setOfferStatus(c.offer?.offerLetterStatus || "SENT");
                       }}
-                      className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow cursor-pointer transition-shadow"
+                      className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow cursor-pointer transition-shadow active:cursor-grabbing hover:border-indigo-300"
                     >
                       <p className="text-xs font-bold text-slate-800 line-clamp-1">{c.fullName}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5 truncate">{c.email}</p>
@@ -241,7 +259,7 @@ export function CandidatesPage() {
                           value={c.currentStage}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => stageMutation.mutate({ candidateId: c.id, stage: e.target.value, notes: "Stage updated." })}
-                          className="text-[9px] rounded border border-slate-200 p-0.5 bg-slate-50 text-slate-600 font-bold"
+                          className="text-[9px] rounded border border-slate-200 p-0.5 bg-slate-50 text-slate-600 font-bold cursor-pointer"
                         >
                           {STAGES.map((s) => (
                             <option key={s.id} value={s.id}>{s.label}</option>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth0 } from "@auth0/auth0-react";
 import { Layout } from "../components/Layout";
 import { useAuthStore } from "../store/authStore";
 import { getHmDashboard, getTaDashboard, getAdminDashboard } from "../api/dashboard";
@@ -10,7 +11,16 @@ import { api } from "../api/client";
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user);
-  const role = user?.role;
+  const { user: auth0User } = useAuth0();
+  
+  const rolesClaim = auth0User?.["https://hrms.app/roles"];
+  const rawRole = user?.role || (Array.isArray(rolesClaim) ? rolesClaim[0] : rolesClaim);
+
+  const role = rawRole ? (
+    rawRole.toLowerCase() === "hm" ? "HM" :
+    (rawRole.toLowerCase() === "hr_ta" || rawRole.toLowerCase() === "hr/ta") ? "HR_TA" :
+    rawRole.toLowerCase() === "admin" ? "Admin" : undefined
+  ) : undefined;
 
   if (role === "HM") return <HmDashboard />;
   if (role === "HR_TA") return <TaDashboard />;

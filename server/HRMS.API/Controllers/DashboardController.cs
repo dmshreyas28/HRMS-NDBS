@@ -115,15 +115,13 @@ namespace HRMS.API.Controllers
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> GetAdminDashboard()
         {
-            var allPositions = await _positionRepo.GetAllAsync();
-            var allUsers = await _userRepo.GetAllAsync();
-            var allCostCentres = await _costCentreRepo.GetAllAsync();
-            var allTemplates = await _mrfTemplateRepo.GetAllAsync();
+            var totalPositions = await _positionRepo.CountAsync();
+            var totalUsers = await _userRepo.CountAsync();
+            var totalCostCentres = await _costCentreRepo.CountAsync();
+            var totalTemplates = await _mrfTemplateRepo.CountAsync();
 
-            // Group positions by status
-            var statusCounts = allPositions
-                .GroupBy(p => p.Status.ToString())
-                .ToDictionary(g => g.Key, g => g.Count());
+            // Get status counts from aggregation
+            var statusCounts = await _positionRepo.GetStatusBreakdownAsync();
 
             // Ensure all statuses exist in the dictionary
             foreach (var status in Enum.GetNames(typeof(PositionStatus)))
@@ -136,10 +134,10 @@ namespace HRMS.API.Controllers
 
             var data = new
             {
-                TotalPositions = allPositions.Count,
-                TotalUsers = allUsers.Count,
-                TotalCostCentres = allCostCentres.Count,
-                TotalTemplates = allTemplates.Count,
+                TotalPositions = totalPositions,
+                TotalUsers = totalUsers,
+                TotalCostCentres = totalCostCentres,
+                TotalTemplates = totalTemplates,
                 StatusBreakdown = statusCounts
             };
 

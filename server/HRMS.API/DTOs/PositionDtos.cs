@@ -90,4 +90,9 @@ namespace HRMS.API.DTOs
     {
         public int DurationDays { get; set; }
     }
+
+    public class UpdateReviewerEmailRequest
+    {
+        public string Draft { get; set; } = null!;
+    }
 }

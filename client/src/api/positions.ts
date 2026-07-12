@@ -33,3 +33,11 @@ export function rejectPosition(id: string, reason: string): Promise<Position> { 
 export function holdPosition(id: string, durationDays: number): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/hold`, { durationDays }); }
 export function releaseHoldPosition(id: string): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/release-hold`); }
 export function postJob(id: string): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/post`); }
+
+export function saveReviewerEmailDraft(id: string, draft: string): Promise<Position> {
+  return api.patch<Position>(`/api/positions/${id}/reviewer-email`, { draft });
+}
+
+export function sendReviewerEmail(id: string): Promise<void> {
+  return api.post<void>(`/api/positions/${id}/reviewer-email/send`, {});
+}

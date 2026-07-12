@@ -11,6 +11,8 @@ using HRMS.API.Repositories;
 using HRMS.API.Services;
 using HRMS.API.Middleware;
 using HRMS.API.Jobs;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +76,10 @@ builder.Services.AddControllers()
         opts.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
+// Register FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<HRMS.API.Validators.CreatePositionRequestValidator>();
+
 // Register Exception Handler
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -96,12 +102,15 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("HMOnly", p => p.RequireClaim("https://hrms.app/roles", "hm"));
-    options.AddPolicy("TAOnly", p => p.RequireClaim("https://hrms.app/roles", "hr_ta"));
-    options.AddPolicy("AdminOnly", p => p.RequireClaim("https://hrms.app/roles", "admin"));
+    options.AddPolicy("HMOnly", p => p.RequireAssertion(ctx =>
+        ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" && c.Value.Equals("hm", StringComparison.OrdinalIgnoreCase))));
+    options.AddPolicy("TAOnly", p => p.RequireAssertion(ctx =>
+        ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" && c.Value.Equals("hr_ta", StringComparison.OrdinalIgnoreCase))));
+    options.AddPolicy("AdminOnly", p => p.RequireAssertion(ctx =>
+        ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" && c.Value.Equals("admin", StringComparison.OrdinalIgnoreCase))));
     options.AddPolicy("HMOrTA", p => p.RequireAssertion(ctx =>
-        ctx.User.HasClaim("https://hrms.app/roles", "hm") ||
-        ctx.User.HasClaim("https://hrms.app/roles", "hr_ta")));
+        ctx.User.Claims.Any(c => c.Type == "https://hrms.app/roles" &&
+            (c.Value.Equals("hm", StringComparison.OrdinalIgnoreCase) || c.Value.Equals("hr_ta", StringComparison.OrdinalIgnoreCase)))));
 });
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

@@ -174,6 +174,12 @@ namespace HRMS.API.Models
         [BsonRepresentation(BsonType.ObjectId)]
         public string? ReviewerId { get; set; }
 
+        [BsonElement("reviewerEmailDraft")]
+        public string? ReviewerEmailDraft { get; set; }
+
+        [BsonElement("reviewerEmailSent")]
+        public bool ReviewerEmailSent { get; set; }
+
         [BsonElement("approvalSkipped")]
         public bool ApprovalSkipped { get; set; }
 
