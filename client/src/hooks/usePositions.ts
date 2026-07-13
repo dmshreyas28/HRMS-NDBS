@@ -1,18 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "./useApi";
 import { listPositions, getPosition, getAuditTrail, createPosition, deletePosition, updatePosition, submitPosition, approvePosition, rejectPosition, type CreatePositionInput, type UpdatePositionInput } from "../api/positions";
 import type { PositionStatus } from "../types/models";
 
 export function usePositions(status?: PositionStatus) {
-  return useQuery({ queryKey: queryKeys.positions(status), queryFn: () => listPositions(status) });
+  return useQuery({ queryKey: ["positions", status ?? "all"] as const, queryFn: () => listPositions(status) });
 }
 
 export function usePosition(id: string | undefined) {
-  return useQuery({ queryKey: queryKeys.position(id ?? ""), queryFn: () => getPosition(id!), enabled: !!id });
+  return useQuery({ queryKey: ["position", id] as const, queryFn: () => getPosition(id!), enabled: !!id });
 }
 
 export function useAuditTrail(id: string | undefined) {
-  return useQuery({ queryKey: queryKeys.auditTrail(id ?? ""), queryFn: () => getAuditTrail(id!), enabled: !!id });
+  return useQuery({ queryKey: ["audit", id] as const, queryFn: () => getAuditTrail(id!), enabled: !!id });
 }
 
 export function useCreateDraft() {
@@ -27,7 +26,7 @@ export function useDeleteDraft() {
 
 export function useUpdateDraft(id: string) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (input: UpdatePositionInput) => updatePosition(id, input), onSuccess: (updated) => { qc.setQueryData(queryKeys.position(id), updated); qc.invalidateQueries({ queryKey: ["positions"] }); } });
+  return useMutation({ mutationFn: (input: UpdatePositionInput) => updatePosition(id, input), onSuccess: (updated) => { qc.setQueryData(["position", id] as const, updated); qc.invalidateQueries({ queryKey: ["positions"] }); } });
 }
 
 export function useSubmitPosition() {
