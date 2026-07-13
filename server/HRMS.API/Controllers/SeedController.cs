@@ -126,6 +126,50 @@ namespace HRMS.API.Controllers
                         SalaryRange = new TemplateSalaryRange { Min = 700000, Max = 1300000 },
                         IsActive = true,
                         CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-004",
+                        Name = "Finance Analyst Template",
+                        JobTitle = "Finance Analyst",
+                        JdSkeleton = "We are looking for a Finance Analyst to join our team. You will be responsible for budgeting, financial forecasting, and operational performance analysis.",
+                        RequiredSkills = new List<string> { "Financial Modeling", "Excel", "SQL", "Budgeting", "Forecasting" },
+                        SalaryRange = new TemplateSalaryRange { Min = 600000, Max = 1100000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-001",
+                        Name = "Product Manager Template",
+                        JobTitle = "Product Manager",
+                        JdSkeleton = "We are looking for a Product Manager to own product features from concept to launch. You will collaborate with engineering, design, and marketing to define product requirements and deliver value to our customers.",
+                        RequiredSkills = new List<string> { "Product Strategy", "Agile", "User Research", "Roadmapping", "Data Analytics" },
+                        SalaryRange = new TemplateSalaryRange { Min = 1000000, Max = 1800000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-001",
+                        Name = "QA Engineer Template",
+                        JobTitle = "QA Engineer",
+                        JdSkeleton = "We are looking for a QA Engineer to design and execute test cases, identify bugs, and automate regression tests to ensure high-quality software releases.",
+                        RequiredSkills = new List<string> { "Selenium", "Test Automation", "Manual Testing", "REST API Testing", "SQL" },
+                        SalaryRange = new TemplateSalaryRange { Min = 500000, Max = 950000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        CostCentre = "CC-002",
+                        Name = "Sales Executive Template",
+                        JobTitle = "Sales Executive",
+                        JdSkeleton = "We are looking for a Sales Executive to drive revenue growth, manage customer relationships, and close new deals.",
+                        RequiredSkills = new List<string> { "Negotiation", "B2B Sales", "Lead Generation", "CRM Tools", "Communication" },
+                        SalaryRange = new TemplateSalaryRange { Min = 400000, Max = 800000 },
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
                     }
                 };
 

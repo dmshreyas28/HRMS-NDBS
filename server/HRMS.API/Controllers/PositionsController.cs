@@ -53,6 +53,14 @@ namespace HRMS.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = position.Id }, ApiResponse<Position>.Ok(position));
         }
 
+        [HttpDelete("{id}")]
+        [Authorize(Policy = "HMOnly")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            await _positionService.DeletePositionAsync(id, await GetCurrentMongoUserIdAsync(_userRepo));
+            return Ok(ApiResponse.Ok());
+        }
+
         [HttpPatch("{id}")]
         public async Task<IActionResult> Update(string id, [FromBody] UpdatePositionRequest request)
         {

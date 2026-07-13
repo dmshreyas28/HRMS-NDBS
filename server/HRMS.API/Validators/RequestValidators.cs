@@ -36,24 +36,6 @@ namespace HRMS.API.Validators
         public CreatePositionRequestValidator()
         {
             RuleFor(x => x.PositionType).IsInEnum().WithMessage("Position type is invalid.");
-            RuleFor(x => x.CostCentre).NotEmpty().WithMessage("Cost centre is required.");
-            RuleFor(x => x.JobCode).NotEmpty().WithMessage("Job code is required.");
-            RuleFor(x => x.Division).NotEmpty().WithMessage("Division is required.");
-            RuleFor(x => x.JobTitle).NotEmpty().WithMessage("Job title is required.");
-            RuleFor(x => x.ReportingManager).NotEmpty().WithMessage("Reporting manager is required.");
-            RuleFor(x => x.Jd).NotEmpty().WithMessage("Job description is required.");
-            RuleFor(x => x.RequiredSkills).NotEmpty().WithMessage("At least one required skill must be specified.");
-            RuleFor(x => x.Location).NotEmpty().WithMessage("Location is required.");
-            RuleFor(x => x.ExperienceLevel).NotEmpty().WithMessage("Experience level is required.");
-            RuleFor(x => x.ImpactIfUnfilled).NotEmpty().WithMessage("Impact if unfilled is required.");
-            RuleFor(x => x.SittingPlace).NotEmpty().WithMessage("Sitting place is required.");
-            RuleFor(x => x.MrfTemplateId).NotEmpty().WithMessage("MRF template ID is required.");
-
-            RuleFor(x => x.SalaryRange).SetValidator(new SalaryRangeDtoValidator());
-
-            RuleFor(x => x.RequiredStartDate)
-                .GreaterThanOrEqualTo(DateTime.UtcNow.Date)
-                .WithMessage("Required start date cannot be in the past.");
 
             RuleFor(x => x.ReplacementDetails)
                 .NotNull().When(x => x.PositionType == PositionType.REPLACEMENT)
@@ -73,22 +55,7 @@ namespace HRMS.API.Validators
     {
         public UpdatePositionRequestValidator()
         {
-            RuleFor(x => x.CostCentre).NotEmpty().WithMessage("Cost centre is required.");
-            RuleFor(x => x.Division).NotEmpty().WithMessage("Division is required.");
-            RuleFor(x => x.JobTitle).NotEmpty().WithMessage("Job title is required.");
-            RuleFor(x => x.ReportingManager).NotEmpty().WithMessage("Reporting manager is required.");
-            RuleFor(x => x.Jd).NotEmpty().WithMessage("Job description is required.");
-            RuleFor(x => x.RequiredSkills).NotEmpty().WithMessage("At least one required skill is required.");
-            RuleFor(x => x.Location).NotEmpty().WithMessage("Location is required.");
-            RuleFor(x => x.ExperienceLevel).NotEmpty().WithMessage("Experience level is required.");
-            RuleFor(x => x.ImpactIfUnfilled).NotEmpty().WithMessage("Impact if unfilled is required.");
-            RuleFor(x => x.SittingPlace).NotEmpty().WithMessage("Sitting place is required.");
-
             RuleFor(x => x.SalaryRange).SetValidator(new SalaryRangeDtoValidator());
-
-            RuleFor(x => x.RequiredStartDate)
-                .GreaterThanOrEqualTo(DateTime.UtcNow.Date)
-                .WithMessage("Required start date cannot be in the past.");
 
             RuleFor(x => x.ReplacementDetails!)
                 .SetValidator(new ReplacementDetailsDtoValidator())

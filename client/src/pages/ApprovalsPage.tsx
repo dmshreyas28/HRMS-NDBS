@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Layout } from "../components/Layout";
 import { PositionCard } from "../components/PositionCard";
 import { usePositions, useApprovePosition, useRejectPosition } from "../hooks/usePositions";
+import { PageHeader, Spinner, EmptyState, Button, Input } from '../components/ui';
 
 export function ApprovalsPage() {
   const { data: positions, isLoading } = usePositions("PENDING_APPROVAL");
@@ -12,7 +13,7 @@ export function ApprovalsPage() {
 
   const handleApprove = (id: string) => {
     approve.mutate(
-      { id, notes: "Approved by admin." },
+      { id, notes: "Approved." },
       { onError: (e) => alert(`Approve failed: ${(e as Error).message}`) }
     );
   };
@@ -30,14 +31,15 @@ export function ApprovalsPage() {
 
   return (
     <Layout>
-      <h1 className="mb-6 text-2xl font-semibold text-gray-900">Approval Queue</h1>
+      <PageHeader
+        title="Approval Queue"
+        subtitle="Review and sign-off pending headcount requisitions"
+      />
 
       {isLoading ? (
-        <p className="text-gray-500">Loading…</p>
+        <div className="flex justify-center py-12"><Spinner /></div>
       ) : !positions || positions.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-gray-500">
-          No positions awaiting approval.
-        </p>
+        <EmptyState title="No positions awaiting approval" hint="You are all caught up!" />
       ) : (
         <div className="space-y-3">
           {positions.map((p) => (
@@ -46,30 +48,30 @@ export function ApprovalsPage() {
                 position={p}
                 actions={
                   rejectingId === p.id ? (
-                    <>
-                      <input value={reason} onChange={(e) => setReason(e.target.value)}
+                    <div className="flex items-center gap-2 w-full mt-2 border-t pt-3">
+                      <Input
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
                         placeholder="Reason for rejection (required)"
-                        className="flex-1 rounded border border-gray-300 px-3 py-1 text-sm" autoFocus />
-                      <button onClick={() => confirmReject(p.id)} disabled={reject.isPending}
-                        className="rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
-                        Confirm reject
-                      </button>
-                      <button onClick={() => { setRejectingId(null); setReason(""); }}
-                        className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-100">
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button onClick={() => confirmReject(p.id)} disabled={reject.isPending} variant="danger" className="py-1 px-3 text-xs">
+                        Confirm Reject
+                      </Button>
+                      <Button onClick={() => { setRejectingId(null); setReason(""); }} variant="secondary" className="py-1 px-3 text-xs">
                         Cancel
-                      </button>
-                    </>
+                      </Button>
+                    </div>
                   ) : (
-                    <>
-                      <button onClick={() => handleApprove(p.id)} disabled={approve.isPending}
-                        className="rounded bg-green-600 px-3 py-1 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
+                    <div className="flex gap-2 mt-2 border-t pt-3">
+                      <Button onClick={() => handleApprove(p.id)} disabled={approve.isPending} variant="primary" className="py-1 px-3 text-xs">
                         Approve
-                      </button>
-                      <button onClick={() => setRejectingId(p.id)}
-                        className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-50">
+                      </Button>
+                      <Button onClick={() => setRejectingId(p.id)} variant="danger" className="py-1 px-3 text-xs">
                         Reject
-                      </button>
-                    </>
+                      </Button>
+                    </div>
                   )
                 }
               />

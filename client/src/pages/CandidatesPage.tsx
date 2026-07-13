@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "../components/Layout";
 import { getPosition } from "../api/positions";
@@ -13,6 +13,8 @@ import {
 } from "../api/candidates";
 import type { Candidate } from "../api/candidates";
 import { API_BASE_URL } from "../api/client";
+import { PageHeader, Spinner, Button, Input, Select, Modal } from "../components/ui";
+import { CandidateStageBadge } from "../components/StatusBadge";
 
 const STAGES = [
   { id: "APPLIED", label: "Applied" },
@@ -25,6 +27,7 @@ const STAGES = [
 
 export function CandidatesPage() {
   const { id: positionId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -61,7 +64,7 @@ export function CandidatesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: any) => createCandidate(positionId!, input),
+    mutationFn: (input: { fullName: string; email: string; phone: string; source: string; cvFileUrl?: string }) => createCandidate(positionId!, input),
     onSuccess: (newCand) => {
       queryClient.invalidateQueries({ queryKey: ["candidates", positionId] });
       setShowAddModal(false);
@@ -95,7 +98,7 @@ export function CandidatesPage() {
       transitionCandidateStage(positionId!, candidateId, stage, notes),
     onSuccess: (updatedCand) => {
       queryClient.invalidateQueries({ queryKey: ["candidates", positionId] });
-      queryClient.invalidateQueries({ queryKey: ["position", positionId] }); // in case position gets FILLED
+      queryClient.invalidateQueries({ queryKey: ["position", positionId] });
       if (selectedCandidate?.id === updatedCand.id) {
         setSelectedCandidate(updatedCand);
       }
@@ -104,7 +107,7 @@ export function CandidatesPage() {
   });
 
   const feedbackMutation = useMutation({
-    mutationFn: ({ candidateId, feedback }: { candidateId: string; feedback: any }) =>
+    mutationFn: ({ candidateId, feedback }: { candidateId: string; feedback: { stage: string; interviewer: string; rating: number; feedback: string } }) =>
       addCandidateFeedback(positionId!, candidateId, feedback),
     onSuccess: (updatedCand) => {
       queryClient.invalidateQueries({ queryKey: ["candidates", positionId] });
@@ -119,7 +122,7 @@ export function CandidatesPage() {
   });
 
   const offerMutation = useMutation({
-    mutationFn: ({ candidateId, offer }: { candidateId: string; offer: any }) =>
+    mutationFn: ({ candidateId, offer }: { candidateId: string; offer: { salary: number; startDate: string; offerLetterStatus: string } }) =>
       setCandidateOffer(positionId!, candidateId, offer),
     onSuccess: (updatedCand) => {
       queryClient.invalidateQueries({ queryKey: ["candidates", positionId] });
@@ -193,31 +196,23 @@ export function CandidatesPage() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between border-b pb-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">ATS Candidates</h1>
-            <span className="rounded bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-xs text-indigo-700 font-semibold uppercase">
-              {pos?.jobCode}
-            </span>
+      <PageHeader
+        title="ATS Candidates"
+        subtitle={`Tracking candidates for ${pos?.jobTitle || "Requisition"}`}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => navigate(`/positions/${positionId}`)}>
+              ← Details
+            </Button>
+            <Button variant="primary" onClick={() => setShowAddModal(true)}>
+              Add Candidate
+            </Button>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Tracking candidates for <Link to={`/positions/${positionId}`} className="text-indigo-600 font-semibold hover:underline">{pos?.jobTitle}</Link>
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-600/10 hover:bg-indigo-700 transition-all"
-          >
-            Add Candidate
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {isLoading ? (
-        <p className="text-slate-500 py-8 text-center">Loading candidates pipeline…</p>
+        <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 overflow-x-auto pb-4">
           {STAGES.map((stage) => {
@@ -227,10 +222,10 @@ export function CandidatesPage() {
                 key={stage.id}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => handleDrop(e, stage.id)}
-                className="min-w-[180px] bg-slate-100/50 rounded-xl p-3 border border-slate-200/80 flex flex-col h-[500px] hover:bg-slate-100 transition-colors"
+                className="min-w-[190px] bg-slate-100/50 rounded-xl p-3 border border-slate-200/80 flex flex-col h-[520px] hover:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center justify-between mb-3 border-b pb-2">
-                  <span className="text-xs font-bold text-slate-600 tracking-wide uppercase truncate">{stage.label}</span>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-wide uppercase truncate">{stage.label}</span>
                   <span className="rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold h-5 w-5 flex items-center justify-center shrink-0">
                     {list.length}
                   </span>
@@ -248,18 +243,17 @@ export function CandidatesPage() {
                         setOfferStartDate(c.offer?.startDate ? c.offer.startDate.substring(0, 10) : "");
                         setOfferStatus(c.offer?.offerLetterStatus || "SENT");
                       }}
-                      className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow cursor-pointer transition-shadow active:cursor-grabbing hover:border-indigo-300"
+                      className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow cursor-pointer transition-shadow active:cursor-grabbing hover:border-brand-300"
                     >
                       <p className="text-xs font-bold text-slate-800 line-clamp-1">{c.fullName}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5 truncate">{c.email}</p>
                       <div className="mt-2.5 flex items-center justify-between gap-1">
                         <span className="text-[9px] font-medium text-slate-400 capitalize">{c.source.toLowerCase().replace("_", " ")}</span>
-                        {/* Quick Move Stage Actions */}
                         <select
                           value={c.currentStage}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => stageMutation.mutate({ candidateId: c.id, stage: e.target.value, notes: "Stage updated." })}
-                          className="text-[9px] rounded border border-slate-200 p-0.5 bg-slate-50 text-slate-600 font-bold cursor-pointer"
+                          className="text-[9px] rounded border border-slate-200 p-0.5 bg-slate-50 text-slate-655 font-bold cursor-pointer"
                         >
                           {STAGES.map((s) => (
                             <option key={s.id} value={s.id}>{s.label}</option>
@@ -277,22 +271,22 @@ export function CandidatesPage() {
         </div>
       )}
 
-      {/* Candidate Profile / Feedback / Offer Letter Detail Drawer Modal */}
+      {/* Candidate Profile Detail Drawer Modal */}
       {selectedCandidate && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-end z-50">
           <div className="w-full max-w-lg bg-white shadow-2xl h-full flex flex-col overflow-y-auto p-6 border-l border-slate-200 animate-slide-in">
             <div className="flex items-center justify-between border-b pb-4 mb-5">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">{selectedCandidate.fullName}</h3>
-                <span className="inline-block mt-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 border rounded px-2 py-0.5 uppercase tracking-wide">
-                  {selectedCandidate.currentStage}
+                <span className="mt-1 block">
+                  <CandidateStageBadge stage={selectedCandidate.currentStage} />
                 </span>
               </div>
               <button onClick={() => setSelectedCandidate(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">&times; Close</button>
             </div>
 
             <div className="space-y-6 flex-1 text-sm text-slate-700">
-              {/* Contact info & CV details */}
+              {/* Contact info */}
               <section className="bg-slate-50 p-4 rounded-xl border space-y-2">
                 <h4 className="font-bold text-xs uppercase tracking-wide text-slate-400">Contact Details</h4>
                 <p><span className="font-semibold text-slate-500">Email:</span> {selectedCandidate.email}</p>
@@ -321,7 +315,7 @@ export function CandidatesPage() {
                 </div>
               </section>
 
-              {/* Offer Details Form (Shows only when stage is OFFER or HIRED) */}
+              {/* Offer Details */}
               {(selectedCandidate.currentStage === "OFFER" || selectedCandidate.currentStage === "HIRED") && (
                 <section className="border border-indigo-100 rounded-xl bg-indigo-50/10 p-4 space-y-4">
                   <h4 className="font-bold text-xs uppercase tracking-wide text-indigo-700">Offer Letter Details</h4>
@@ -333,7 +327,7 @@ export function CandidatesPage() {
                           type="number"
                           value={offerSalary}
                           onChange={(e) => setOfferSalary(e.target.value)}
-                          className="w-full rounded border p-1.5"
+                          className="w-full rounded border border-slate-300 p-1.5"
                           required
                         />
                       </div>
@@ -343,35 +337,35 @@ export function CandidatesPage() {
                           type="date"
                           value={offerStartDate}
                           onChange={(e) => setOfferStartDate(e.target.value)}
-                          className="w-full rounded border p-1.5"
+                          className="w-full rounded border border-slate-300 p-1.5"
                           required
                         />
                       </div>
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-500 mb-1">Offer Letter Status</label>
-                      <select value={offerStatus} onChange={(e) => setOfferStatus(e.target.value)} className="w-full rounded border p-1.5">
+                      <select value={offerStatus} onChange={(e) => setOfferStatus(e.target.value)} className="w-full rounded border border-slate-300 p-1.5 bg-white">
                         <option value="NOT_SENT">Not Sent</option>
                         <option value="SENT">Sent to Candidate</option>
                         <option value="ACCEPTED">Accepted by Candidate</option>
                         <option value="DECLINED">Declined by Candidate</option>
                       </select>
                     </div>
-                    <button type="submit" disabled={offerMutation.isPending} className="rounded bg-indigo-600 text-white px-3 py-1.5 font-bold hover:bg-indigo-700 disabled:opacity-50">
+                    <Button type="submit" variant="primary" disabled={offerMutation.isPending}>
                       Save Offer Details
-                    </button>
+                    </Button>
                   </form>
                 </section>
               )}
 
-              {/* Log Interview Feedback Form */}
-              <section className="border rounded-xl p-4 space-y-4">
+              {/* Feedback Form */}
+              <section className="border border-slate-200 rounded-xl p-4 space-y-4">
                 <h4 className="font-bold text-xs uppercase tracking-wide text-slate-400">Log Interview Feedback</h4>
                 <form onSubmit={handleFeedbackSubmit} className="space-y-3 text-xs">
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block font-semibold text-slate-500 mb-1">Interview Stage</label>
-                      <select value={feedbackStage} onChange={(e) => setFeedbackStage(e.target.value)} className="w-full rounded border p-1.5">
+                      <select value={feedbackStage} onChange={(e) => setFeedbackStage(e.target.value)} className="w-full rounded border border-slate-300 p-1.5 bg-white">
                         <option value="SCREENING">Screening</option>
                         <option value="INTERVIEW_SCHEDULED">Technical Round 1</option>
                         <option value="INTERVIEW_COMPLETED">HR Interview</option>
@@ -383,14 +377,14 @@ export function CandidatesPage() {
                         value={feedbackInterviewer}
                         onChange={(e) => setFeedbackInterviewer(e.target.value)}
                         placeholder="e.g. Sarah Smith"
-                        className="w-full rounded border p-1.5"
+                        className="w-full rounded border border-slate-300 p-1.5"
                         required
                       />
                     </div>
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-500 mb-1">Rating (1-5 Stars)</label>
-                    <select value={feedbackRating} onChange={(e) => setFeedbackRating(e.target.value)} className="w-full rounded border p-1.5">
+                    <select value={feedbackRating} onChange={(e) => setFeedbackRating(e.target.value)} className="w-full rounded border border-slate-300 p-1.5 bg-white">
                       <option value="5">5 - Excellent Fit</option>
                       <option value="4">4 - Strong Fit</option>
                       <option value="3">3 - Solid Competency</option>
@@ -405,17 +399,17 @@ export function CandidatesPage() {
                       onChange={(e) => setFeedbackText(e.target.value)}
                       placeholder="Type details regarding skills assessed, coding performance, cultural fit, etc..."
                       rows={3}
-                      className="w-full rounded border p-1.5"
+                      className="w-full rounded border border-slate-300 p-1.5"
                       required
                     />
                   </div>
-                  <button type="submit" disabled={feedbackMutation.isPending} className="rounded bg-slate-900 text-white px-3 py-1.5 font-bold hover:bg-slate-800 disabled:opacity-50">
+                  <Button type="submit" variant="primary" disabled={feedbackMutation.isPending}>
                     Submit Feedback Log
-                  </button>
+                  </Button>
                 </form>
               </section>
 
-              {/* Feedback History log */}
+              {/* Feedback History */}
               <section className="space-y-3">
                 <h4 className="font-bold text-xs uppercase tracking-wide text-slate-400">Feedback History ({selectedCandidate.interviewFeedback.length})</h4>
                 {selectedCandidate.interviewFeedback.length === 0 ? (
@@ -426,9 +420,9 @@ export function CandidatesPage() {
                       <div key={i} className="bg-slate-50 border rounded-lg p-3 text-xs leading-normal">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="font-bold text-slate-700 capitalize">{f.stage.toLowerCase().replace("_", " ")}</span>
-                          <span className="text-indigo-600 font-extrabold">{f.rating} / 5 Rating</span>
+                          <span className="text-indigo-650 font-extrabold">{f.rating} / 5 Rating</span>
                         </div>
-                        <p className="text-slate-600">{f.feedback}</p>
+                        <p className="text-slate-655">{f.feedback}</p>
                         <span className="text-[10px] text-slate-400 mt-1 block">Interviewer: {f.interviewer} · {new Date(f.date).toLocaleDateString()}</span>
                       </div>
                     ))}
@@ -455,62 +449,36 @@ export function CandidatesPage() {
       )}
 
       {/* Add Candidate Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleCreateSubmit} className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 border border-slate-100 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Add New Candidate</h3>
-            <p className="text-xs text-slate-400">Insert applicant details. You can attach a CV file below.</p>
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Candidate">
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          <p className="text-xs text-slate-400">Insert applicant details. You can attach a CV file below.</p>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Full Name</label>
-                <input value={candName} onChange={(e) => setCandName(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
-                <input type="email" value={candEmail} onChange={(e) => setCandEmail(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Phone Number</label>
-                <input value={candPhone} onChange={(e) => setCandPhone(e.target.value)} className="w-full rounded border p-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Source</label>
-                <select value={candSource} onChange={(e) => setCandSource(e.target.value)} className="w-full rounded border p-2 text-sm">
-                  <option value="JOB_BOARD">Job Board (LinkedIn, etc)</option>
-                  <option value="REFERRAL">Internal Employee Referral</option>
-                  <option value="DIRECT">Direct Applicant</option>
-                  <option value="OTHER">Other / Agency</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Attach CV (PDF, optional)</label>
-                <input type="file" accept=".pdf,.doc,.docx" onChange={handleCvFileChange} className="w-full text-xs" />
-              </div>
+          <div className="space-y-3">
+            <Input label="Full Name" value={candName} onChange={(e) => setCandName(e.target.value)} required />
+            <Input type="email" label="Email" value={candEmail} onChange={(e) => setCandEmail(e.target.value)} required />
+            <Input label="Phone Number" value={candPhone} onChange={(e) => setCandPhone(e.target.value)} required />
+            <Select label="Source" value={candSource} onChange={(e) => setCandSource(e.target.value)}>
+              <option value="JOB_BOARD">Job Board (LinkedIn, etc)</option>
+              <option value="REFERRAL">Internal Employee Referral</option>
+              <option value="DIRECT">Direct Applicant</option>
+              <option value="OTHER">Other / Agency</option>
+            </Select>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Attach CV (PDF, optional)</label>
+              <input type="file" accept=".pdf,.doc,.docx" onChange={handleCvFileChange} className="w-full text-xs" />
             </div>
+          </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddModal(false);
-                  setCvFile(null);
-                }}
-                className="rounded-lg border px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={createMutation.isPending}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/10 disabled:opacity-50"
-              >
-                {createMutation.isPending ? "Adding..." : "Add Candidate"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <Button variant="secondary" onClick={() => { setShowAddModal(false); setCvFile(null); }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Adding..." : "Add Candidate"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </Layout>
   );
 }

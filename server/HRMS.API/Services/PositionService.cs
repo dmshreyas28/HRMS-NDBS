@@ -23,6 +23,7 @@ namespace HRMS.API.Services
         Task<Position> AutoClosePositionAsync(string id, string actorUserId);
         Task UpdateReviewerEmailDraftAsync(string id, string draft, string actorUserId);
         Task SendReviewerEmailAsync(string id, string actorUserId);
+        Task DeletePositionAsync(string id, string actorUserId);
     }
 
     public class PositionService : IPositionService
@@ -103,7 +104,7 @@ namespace HRMS.API.Services
                 ReviewerId = request.ReviewerId,
                 ApprovalSkipped = request.ApprovalSkipped,
                 ApprovalSkippedReason = request.ApprovalSkippedReason,
-                MrfTemplateId = request.MrfTemplateId,
+                MrfTemplateId = string.IsNullOrWhiteSpace(request.MrfTemplateId) ? null : request.MrfTemplateId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -199,6 +200,37 @@ namespace HRMS.API.Services
             var position = await GetByIdAsync(id);
             if (position.Status != PositionStatus.DRAFT)
                 throw new InvalidOperationException("Position is not in draft status.");
+
+            // Enforce completeness on submission
+            if (string.IsNullOrWhiteSpace(position.JobTitle))
+                throw new ArgumentException("Job title is required to submit for approval.");
+            if (string.IsNullOrWhiteSpace(position.CostCentre))
+                throw new ArgumentException("Cost centre is required to submit for approval.");
+            if (string.IsNullOrWhiteSpace(position.Division))
+                throw new ArgumentException("Division is required to submit for approval.");
+            if (string.IsNullOrWhiteSpace(position.Jd))
+                throw new ArgumentException("Job description is required to submit for approval.");
+            if (position.RequiredSkills == null || position.RequiredSkills.Count == 0)
+                throw new ArgumentException("At least one required skill is required to submit for approval.");
+            if (string.IsNullOrWhiteSpace(position.Location))
+                throw new ArgumentException("Location is required to submit for approval.");
+            if (string.IsNullOrWhiteSpace(position.ExperienceLevel))
+                throw new ArgumentException("Experience level is required to submit for approval.");
+
+
+            if (position.PositionType == PositionType.REPLACEMENT)
+            {
+                if (position.ReplacementDetails == null)
+                    throw new ArgumentException("Replacement details are required for replacement position type.");
+                if (string.IsNullOrWhiteSpace(position.ReplacementDetails.ExEmployeeId))
+                    throw new ArgumentException("Ex-employee ID is required.");
+                if (string.IsNullOrWhiteSpace(position.ReplacementDetails.ExEmployeeName))
+                    throw new ArgumentException("Ex-employee name is required.");
+                if (string.IsNullOrWhiteSpace(position.ReplacementDetails.ExEmployeeEmail))
+                    throw new ArgumentException("Ex-employee email is required.");
+                if (string.IsNullOrWhiteSpace(position.ReplacementDetails.ExEmployeePhone))
+                    throw new ArgumentException("Ex-employee phone number is required.");
+            }
 
             position.ReviewerId = request.ReviewerId;
             position.ApprovalSkipped = request.ApprovalSkipped;
@@ -527,6 +559,18 @@ namespace HRMS.API.Services
             });
 
             await _positionRepo.UpdateAsync(id, position);
+        }
+
+        public async Task DeletePositionAsync(string id, string actorUserId)
+        {
+            var position = await GetByIdAsync(id);
+            if (position.Status != PositionStatus.DRAFT)
+                throw new InvalidOperationException("Only draft positions can be deleted.");
+
+            if (position.RaisedBy != actorUserId)
+                throw new UnauthorizedAccessException("You are not authorized to delete this draft.");
+
+            await _positionRepo.DeleteAsync(id);
         }
 
         private static string BuildReviewerEmailDraft(Position p, string reviewerName, string raisedByName) =>

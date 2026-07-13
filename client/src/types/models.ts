@@ -17,6 +17,12 @@ export interface ReplacementDetails {
   colourCode: "GREEN" | "RED" | "BLACK";
 }
 
+export interface OnHoldDetails {
+  isOnHold: boolean;
+  heldAt: string | null;
+  expiresAt: string | null;
+}
+
 export interface Position {
   id: string; positionType: PositionType; status: PositionStatus; costCentre: string; jobCode: string; division: string;
   jobTitle: string; reportingManager: string; jd: string; requiredSkills: string[]; salaryRange: SalaryRange;
@@ -28,6 +34,8 @@ export interface Position {
   replacementDetails?: ReplacementDetails;
   reviewerEmailDraft?: string;
   reviewerEmailSent?: boolean;
+  onHold: OnHoldDetails;
+  raisedByName?: string;
 }
 
 export interface MrfTemplate {
