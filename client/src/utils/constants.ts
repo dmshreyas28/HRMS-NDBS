@@ -1,4 +1,4 @@
-import type { PositionStatus } from '../types/models';
+import type { PositionStatus, UserRole } from '../types/models';
 
 export const POSITION_STATUS_META: Record<PositionStatus, { label: string; color: string }> = {
   DRAFT: { label: 'Draft', color: 'bg-slate-100 text-slate-700' },
@@ -33,9 +33,6 @@ export const ROLE_META: Record<string, { label: string; color: string }> = {
   HM: { label: 'Hiring Manager', color: 'bg-blue-100 text-blue-800' },
   HR_TA: { label: 'HR / Talent Acquisition', color: 'bg-emerald-100 text-emerald-800' },
   Admin: { label: 'Admin', color: 'bg-purple-100 text-purple-800' },
-  hm: { label: 'Hiring Manager', color: 'bg-blue-100 text-blue-800' },
-  hr_ta: { label: 'HR / Talent Acquisition', color: 'bg-emerald-100 text-emerald-800' },
-  admin: { label: 'Admin', color: 'bg-purple-100 text-purple-800' }
 };
 
 export const COLOUR_CODE_META = {
@@ -75,3 +72,12 @@ export function daysBetween(from: string | Date, to: string | Date): number {
 }
 
 export const uploadsBase = import.meta.env.VITE_API_BASE_URL || '';
+
+export function normalizeRole(rawRole: string | undefined | null): UserRole | undefined {
+  if (!rawRole) return undefined;
+  const lower = rawRole.toLowerCase();
+  if (lower === "hm") return "HM";
+  if (lower === "hr_ta" || lower === "hr/ta") return "HR_TA";
+  if (lower === "admin") return "Admin";
+  return undefined;
+}
