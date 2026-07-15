@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../store/authStore";
 import { useAuth0 } from "@auth0/auth0-react";
+import { normalizeRole } from "../utils/constants";
 import type { UserRole } from "../types/models";
 
 export function RequireRole({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
@@ -11,11 +12,7 @@ export function RequireRole({ roles, children }: { roles: UserRole[]; children: 
   const rolesClaim = auth0User?.["https://hrms.app/roles"];
   const rawRole = user?.role || (Array.isArray(rolesClaim) ? rolesClaim[0] : rolesClaim);
 
-  const role = rawRole ? (
-    rawRole.toLowerCase() === "hm" ? "HM" :
-    (rawRole.toLowerCase() === "hr_ta" || rawRole.toLowerCase() === "hr/ta") ? "HR_TA" :
-    rawRole.toLowerCase() === "admin" ? "Admin" : undefined
-  ) : undefined;
+  const role = normalizeRole(rawRole);
 
   if (!role) {
     return <div className="p-8 text-gray-600">Loading your profile…</div>;

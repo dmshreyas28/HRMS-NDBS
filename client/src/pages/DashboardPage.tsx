@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader, Card, Spinner, EmptyState, Button, Modal } from '../components/ui';
 import { StatusBadge } from '../components/StatusBadge';
-import { formatDate } from '../utils/constants';
+import { formatDate, normalizeRole } from '../utils/constants';
 import type { Position } from '../types/models';
 
 function MiniPosition({ p }: { p: Position }) {
@@ -34,11 +34,7 @@ export function DashboardPage() {
   const rolesClaim = auth0User?.["https://hrms.app/roles"];
   const rawRole = user?.role || (Array.isArray(rolesClaim) ? rolesClaim[0] : rolesClaim);
 
-  const role = rawRole ? (
-    rawRole.toLowerCase() === "hm" ? "HM" :
-    (rawRole.toLowerCase() === "hr_ta" || rawRole.toLowerCase() === "hr/ta") ? "HR_TA" :
-    rawRole.toLowerCase() === "admin" ? "Admin" : undefined
-  ) : undefined;
+  const role = normalizeRole(rawRole);
 
   if (role === "HM") return <HmDashboard />;
   if (role === "HR_TA") return <TaDashboard />;
