@@ -34,7 +34,7 @@ builder.Services.AddSingleton<HRMS.API.Services.MongoDbService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPositionRepository, PositionRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
-builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<NotificationRepository>();
 builder.Services.AddScoped<IMrfTemplateRepository, MrfTemplateRepository>();
 builder.Services.AddScoped<ICostCentreRepository, CostCentreRepository>();
 builder.Services.AddScoped<IDoAEntryRepository, DoAEntryRepository>();

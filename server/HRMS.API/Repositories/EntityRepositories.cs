@@ -130,11 +130,7 @@ namespace HRMS.API.Repositories
     }
 
     // NOTIFICATION REPOSITORY
-    public interface INotificationRepository : IRepository<Notification>
-    {
-    }
-
-    public class NotificationRepository : MongoRepository<Notification>, INotificationRepository
+    public class NotificationRepository : MongoRepository<Notification>
     {
         public NotificationRepository(MongoDbService dbService) : base(dbService, "notifications")
         {

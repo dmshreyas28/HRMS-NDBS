@@ -16,10 +16,10 @@ namespace HRMS.API.Services
 
     public class NotificationService : INotificationService
     {
-        private readonly INotificationRepository _notificationRepo;
+        private readonly NotificationRepository _notificationRepo;
         private readonly IUserRepository _userRepo;
 
-        public NotificationService(INotificationRepository notificationRepo, IUserRepository userRepo)
+        public NotificationService(NotificationRepository notificationRepo, IUserRepository userRepo)
         {
             _notificationRepo = notificationRepo;
             _userRepo = userRepo;
