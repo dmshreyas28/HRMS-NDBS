@@ -138,11 +138,7 @@ namespace HRMS.API.Repositories
     }
 
     // MRF TEMPLATE REPOSITORY
-    public interface IMrfTemplateRepository : IRepository<MrfTemplate>
-    {
-    }
-
-    public class MrfTemplateRepository : MongoRepository<MrfTemplate>, IMrfTemplateRepository
+    public class MrfTemplateRepository : MongoRepository<MrfTemplate>
     {
         public MrfTemplateRepository(MongoDbService dbService) : base(dbService, "mrfTemplates")
         {
@@ -150,11 +146,7 @@ namespace HRMS.API.Repositories
     }
 
     // COST CENTRE REPOSITORY
-    public interface ICostCentreRepository : IRepository<CostCentre>
-    {
-    }
-
-    public class CostCentreRepository : MongoRepository<CostCentre>, ICostCentreRepository
+    public class CostCentreRepository : MongoRepository<CostCentre>
     {
         public CostCentreRepository(MongoDbService dbService) : base(dbService, "costCentres")
         {
@@ -162,11 +154,7 @@ namespace HRMS.API.Repositories
     }
 
     // DOA ENTRY REPOSITORY
-    public interface IDoAEntryRepository : IRepository<DoAEntry>
-    {
-    }
-
-    public class DoAEntryRepository : MongoRepository<DoAEntry>, IDoAEntryRepository
+    public class DoAEntryRepository : MongoRepository<DoAEntry>
     {
         public DoAEntryRepository(MongoDbService dbService) : base(dbService, "doaList")
         {
@@ -174,11 +162,7 @@ namespace HRMS.API.Repositories
     }
 
     // RESIGNATION REPOSITORY
-    public interface IResignationRepository : IRepository<Resignation>
-    {
-    }
-
-    public class ResignationRepository : MongoRepository<Resignation>, IResignationRepository
+    public class ResignationRepository : MongoRepository<Resignation>
     {
         public ResignationRepository(MongoDbService dbService) : base(dbService, "resignations")
         {

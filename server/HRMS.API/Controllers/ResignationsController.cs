@@ -21,10 +21,10 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class ResignationsController : BaseController
     {
-        private readonly IResignationRepository _resignationRepo;
+        private readonly ResignationRepository _resignationRepo;
         private readonly IUserRepository _userRepo;
 
-        public ResignationsController(IResignationRepository resignationRepo, IUserRepository userRepo)
+        public ResignationsController(ResignationRepository resignationRepo, IUserRepository userRepo)
         {
             _resignationRepo = resignationRepo;
             _userRepo = userRepo;

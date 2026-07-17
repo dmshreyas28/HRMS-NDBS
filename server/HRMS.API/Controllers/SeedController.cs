@@ -14,14 +14,14 @@ namespace HRMS.API.Controllers
     [AllowAnonymous]
     public class SeedController : ControllerBase
     {
-        private readonly ICostCentreRepository _costCentreRepo;
-        private readonly IMrfTemplateRepository _mrfTemplateRepo;
-        private readonly IDoAEntryRepository _doaRepo;
+        private readonly CostCentreRepository _costCentreRepo;
+        private readonly MrfTemplateRepository _mrfTemplateRepo;
+        private readonly DoAEntryRepository _doaRepo;
 
         public SeedController(
-            ICostCentreRepository costCentreRepo,
-            IMrfTemplateRepository mrfTemplateRepo,
-            IDoAEntryRepository doaRepo)
+            CostCentreRepository costCentreRepo,
+            MrfTemplateRepository mrfTemplateRepo,
+            DoAEntryRepository doaRepo)
         {
             _costCentreRepo = costCentreRepo;
             _mrfTemplateRepo = mrfTemplateRepo;

@@ -15,9 +15,9 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class MrfTemplatesController : ControllerBase
     {
-        private readonly IMrfTemplateRepository _mrfTemplateRepo;
+        private readonly MrfTemplateRepository _mrfTemplateRepo;
 
-        public MrfTemplatesController(IMrfTemplateRepository mrfTemplateRepo)
+        public MrfTemplatesController(MrfTemplateRepository mrfTemplateRepo)
         {
             _mrfTemplateRepo = mrfTemplateRepo;
         }

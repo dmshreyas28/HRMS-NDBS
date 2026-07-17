@@ -13,9 +13,9 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class CostCentresController : ControllerBase
     {
-        private readonly ICostCentreRepository _costCentreRepo;
+        private readonly CostCentreRepository _costCentreRepo;
 
-        public CostCentresController(ICostCentreRepository costCentreRepo)
+        public CostCentresController(CostCentreRepository costCentreRepo)
         {
             _costCentreRepo = costCentreRepo;
         }

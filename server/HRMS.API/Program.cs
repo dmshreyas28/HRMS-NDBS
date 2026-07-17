@@ -35,10 +35,10 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPositionRepository, PositionRepository>();
 builder.Services.AddScoped<ICandidateRepository, CandidateRepository>();
 builder.Services.AddScoped<NotificationRepository>();
-builder.Services.AddScoped<IMrfTemplateRepository, MrfTemplateRepository>();
-builder.Services.AddScoped<ICostCentreRepository, CostCentreRepository>();
-builder.Services.AddScoped<IDoAEntryRepository, DoAEntryRepository>();
-builder.Services.AddScoped<IResignationRepository, ResignationRepository>();
+builder.Services.AddScoped<MrfTemplateRepository>();
+builder.Services.AddScoped<CostCentreRepository>();
+builder.Services.AddScoped<DoAEntryRepository>();
+builder.Services.AddScoped<ResignationRepository>();
 
 // Register Services
 builder.Services.AddScoped<INotificationService, NotificationService>();

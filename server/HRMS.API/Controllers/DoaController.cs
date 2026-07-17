@@ -13,9 +13,9 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class DoaController : ControllerBase
     {
-        private readonly IDoAEntryRepository _doaEntryRepo;
+        private readonly DoAEntryRepository _doaEntryRepo;
 
-        public DoaController(IDoAEntryRepository doaEntryRepo)
+        public DoaController(DoAEntryRepository doaEntryRepo)
         {
             _doaEntryRepo = doaEntryRepo;
         }

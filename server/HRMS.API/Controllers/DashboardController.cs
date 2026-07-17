@@ -18,17 +18,17 @@ namespace HRMS.API.Controllers
         private readonly IPositionRepository _positionRepo;
         private readonly ICandidateRepository _candidateRepo;
         private readonly IUserRepository _userRepo;
-        private readonly IResignationRepository _resignationRepo;
-        private readonly ICostCentreRepository _costCentreRepo;
-        private readonly IMrfTemplateRepository _mrfTemplateRepo;
+        private readonly ResignationRepository _resignationRepo;
+        private readonly CostCentreRepository _costCentreRepo;
+        private readonly MrfTemplateRepository _mrfTemplateRepo;
 
         public DashboardController(
             IPositionRepository positionRepo,
             ICandidateRepository candidateRepo,
             IUserRepository userRepo,
-            IResignationRepository resignationRepo,
-            ICostCentreRepository costCentreRepo,
-            IMrfTemplateRepository mrfTemplateRepo)
+            ResignationRepository resignationRepo,
+            CostCentreRepository costCentreRepo,
+            MrfTemplateRepository mrfTemplateRepo)
         {
             _positionRepo = positionRepo;
             _candidateRepo = candidateRepo;
