@@ -18,7 +18,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/users', label: 'Users', roles: ['Admin'], icon: '' },
   { to: '/admin/templates', label: 'MRF Templates', roles: ['Admin'], icon: '' },
   { to: '/admin/cost-centres', label: 'Cost Centres', roles: ['Admin'], icon: '' },
-  { to: '/admin/doa', label: 'DoA List', roles: ['Admin'], icon: '' }
+  { to: '/admin/doa', label: 'DoA List', roles: ['Admin'], icon: '' },
+  { to: '/admin/resignations', label: 'Resignations', roles: ['Admin'], icon: '' }
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

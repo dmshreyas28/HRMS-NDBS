@@ -15,7 +15,7 @@ export interface CreatePositionInput {
   requiredStartDate: string; shiftTime: string; shiftDays: string[]; location: string;
   experienceLevel: string; impactIfUnfilled: string; sittingPlace: string;
   reviewerId?: string | null; approvalSkipped: boolean; approvalSkippedReason?: string | null;
-  mrfTemplateId: string; replacementDetails?: unknown;
+  mrfTemplateId: string; replacementDetails?: unknown; resignationId?: string;
 }
 export function createPosition(input: CreatePositionInput): Promise<Position> { return api.post<Position>("/api/positions", input); }
 

@@ -9,11 +9,28 @@ using HRMS.API.Repositories;
 
 namespace HRMS.API.Controllers
 {
+    public class LogResignationRequest
+    {
+        public string EmployeeName { get; set; } = null!;
+        public string EmployeeEmail { get; set; } = null!;
+        public string EmployeePhone { get; set; } = null!;
+        public string Bu { get; set; } = null!;
+        public string Department { get; set; } = null!;
+        public decimal LastSalary { get; set; }
+        public string JobTitle { get; set; } = null!;
+        public string CostCentreId { get; set; } = null!;
+    }
+
     public class ResignationDecisionRequest
     {
         public string Decision { get; set; } = null!; // "HIRE" or "NO_HIRE"
         public string? ReasonForLeaving { get; set; }
         public ColourCode? ColourCode { get; set; }
+    }
+
+    public class ApproveResignationRequest
+    {
+        public bool Approved { get; set; }
     }
 
     [ApiController]
@@ -31,10 +48,14 @@ namespace HRMS.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetResignations()
+        public async Task<IActionResult> GetResignations([FromQuery] string? status)
         {
             var userId = await GetCurrentMongoUserIdAsync(_userRepo);
             var resignations = await _resignationRepo.FindAsync(r => r.ManagerId == userId);
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                resignations = resignations.Where(r => r.Status.Equals(status, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
             return Ok(ApiResponse<List<Resignation>>.Ok(resignations));
         }
 
@@ -47,6 +68,56 @@ namespace HRMS.API.Controllers
             return Ok(ApiResponse<Resignation>.Ok(resignation));
         }
 
+        [HttpGet("pending-approvals")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> GetPendingApprovals()
+        {
+            var all = await _resignationRepo.FindAsync(r => r.Status == "PENDING_APPROVAL");
+            return Ok(ApiResponse<List<Resignation>>.Ok(all));
+        }
+
+        [HttpPost("log")]
+        [Authorize(Policy = "HMOnly")]
+        public async Task<IActionResult> LogResignation([FromBody] LogResignationRequest request)
+        {
+            var userId = await GetCurrentMongoUserIdAsync(_userRepo);
+
+            var resignation = new Resignation
+            {
+                EmployeeId = $"EMP-{new Random().Next(1000, 9999)}",
+                EmployeeName = request.EmployeeName,
+                EmployeeEmail = request.EmployeeEmail,
+                EmployeePhone = request.EmployeePhone,
+                Bu = request.Bu,
+                Department = request.Department,
+                LastSalary = request.LastSalary,
+                JobTitle = request.JobTitle,
+                CostCentreId = request.CostCentreId,
+                ManagerId = userId,
+                Status = "PENDING_APPROVAL",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _resignationRepo.CreateAsync(resignation);
+            return Ok(ApiResponse<Resignation>.Ok(resignation));
+        }
+
+        [HttpPost("approve/{id}")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> ApproveResignation(string id, [FromBody] ApproveResignationRequest request)
+        {
+            var resignation = await _resignationRepo.GetByIdAsync(id);
+            if (resignation == null)
+                return NotFound(ApiResponse.Fail("Resignation not found."));
+
+            if (resignation.Status != "PENDING_APPROVAL")
+                return Conflict(ApiResponse.Fail("This resignation has already been processed."));
+
+            resignation.Status = request.Approved ? "APPROVED" : "REJECTED";
+            await _resignationRepo.UpdateAsync(id, resignation);
+            return Ok(ApiResponse<Resignation>.Ok(resignation));
+        }
+
         [HttpPost("decide/{id}")]
         public async Task<IActionResult> DecideResignation(string id, [FromBody] ResignationDecisionRequest request)
         {
@@ -54,29 +125,24 @@ namespace HRMS.API.Controllers
             if (resignation == null)
                 return NotFound(ApiResponse.Fail("Resignation not found."));
 
-            if (request.Decision.Equals("HIRE", StringComparison.OrdinalIgnoreCase))
-            {
-                resignation.Status = "REPLACED";
-            }
-            else
-            {
-                resignation.Status = "NO_REPLACEMENT";
-            }
+            if (resignation.Status != "APPROVED")
+                return Conflict(ApiResponse.Fail("Only approved resignations can be decided for replacement."));
 
             resignation.ReasonForLeaving = request.ReasonForLeaving;
             resignation.ColourCode = request.ColourCode;
 
-            await _resignationRepo.UpdateAsync(id, resignation);
-            return Ok(ApiResponse<Resignation>.Ok(resignation));
-        }
+            if (request.Decision.Equals("NO_HIRE", StringComparison.OrdinalIgnoreCase))
+            {
+                resignation.Status = "NO_REPLACEMENT";
+                await _resignationRepo.UpdateAsync(id, resignation);
+            }
+            else
+            {
+                // HIRE: do not set REPLACED here; that happens atomically when the replacement MRF is created.
+                // Just store the reason/colour for traceability.
+                await _resignationRepo.UpdateAsync(id, resignation);
+            }
 
-        [HttpPost("simulate")]
-        [Authorize(Policy = "AdminOnly")]
-        public async Task<IActionResult> SimulateResignation([FromBody] Resignation resignation)
-        {
-            resignation.CreatedAt = DateTime.UtcNow;
-            resignation.Status = "PENDING_ACTION";
-            await _resignationRepo.CreateAsync(resignation);
             return Ok(ApiResponse<Resignation>.Ok(resignation));
         }
     }

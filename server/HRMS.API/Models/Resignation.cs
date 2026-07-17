@@ -31,14 +31,23 @@ namespace HRMS.API.Models
         [BsonElement("lastSalary")]
         public decimal LastSalary { get; set; }
 
+        [BsonElement("jobTitle")]
+        public string JobTitle { get; set; } = null!;
+
+        [BsonElement("costCentreId")]
+        public string CostCentreId { get; set; } = null!;
+
         [BsonElement("managerId")]
         public string ManagerId { get; set; } = null!; // The HM who is direct manager of this employee
 
         [BsonElement("status")]
-        public string Status { get; set; } = "PENDING_ACTION"; // PENDING_ACTION, REPLACED, NO_REPLACEMENT
+        public string Status { get; set; } = "PENDING_APPROVAL"; // PENDING_APPROVAL → APPROVED/REJECTED → REPLACED/NO_REPLACEMENT
 
         [BsonElement("reasonForLeaving")]
         public string? ReasonForLeaving { get; set; }
+
+        [BsonElement("replacementPositionId")]
+        public string? ReplacementPositionId { get; set; }
 
         [BsonElement("colourCode")]
         [BsonRepresentation(BsonType.String)]

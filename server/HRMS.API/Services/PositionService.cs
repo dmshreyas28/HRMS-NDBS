@@ -31,15 +31,18 @@ namespace HRMS.API.Services
         private readonly IPositionRepository _positionRepo;
         private readonly IUserRepository _userRepo;
         private readonly INotificationService _notificationService;
+        private readonly ResignationRepository _resignationRepo;
 
         public PositionService(
             IPositionRepository positionRepo,
             IUserRepository userRepo,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ResignationRepository resignationRepo)
         {
             _positionRepo = positionRepo;
             _userRepo = userRepo;
             _notificationService = notificationService;
+            _resignationRepo = resignationRepo;
         }
 
         public async Task<Position> GetByIdAsync(string id)
@@ -136,6 +139,19 @@ namespace HRMS.API.Services
             });
 
             await _positionRepo.CreateAsync(position);
+
+            // If this was created from an approved resignation, mark it as REPLACED atomically
+            if (!string.IsNullOrWhiteSpace(request.ResignationId))
+            {
+                var resignation = await _resignationRepo.GetByIdAsync(request.ResignationId);
+                if (resignation != null && resignation.Status == "APPROVED")
+                {
+                    resignation.Status = "REPLACED";
+                    resignation.ReplacementPositionId = position.Id;
+                    await _resignationRepo.UpdateAsync(request.ResignationId, resignation);
+                }
+            }
+
             return position;
         }
 

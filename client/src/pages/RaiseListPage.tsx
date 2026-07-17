@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "../components/Layout";
 import { StatusBadge } from "../components/StatusBadge";
 import { PositionCard } from "../components/PositionCard";
-import { usePositions, useCreateDraft, useDeleteDraft } from "../hooks/usePositions";
+import { usePositions, useCreateDraft } from "../hooks/usePositions";
 import { useAuthStore } from "../store/authStore";
-import { listResignations } from "../api/resignations";
+import { listResignations, decideResignation } from "../api/resignations";
 import { PageHeader, Card, Spinner, EmptyState, Button, Modal } from '../components/ui';
 import type { Position } from "../types/models";
 
@@ -14,7 +14,6 @@ export function RaiseListPage() {
   const navigate = useNavigate();
   const { data: positions, isLoading } = usePositions();
   const createDraft = useCreateDraft();
-  const deleteDraft = useDeleteDraft();
   const user = useAuthStore((s) => s.user);
 
   const [showTypeModal, setShowTypeModal] = useState(false);
@@ -22,16 +21,30 @@ export function RaiseListPage() {
   const [selectedResignationId, setSelectedResignationId] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const { data: resignations } = useQuery({
+  const [noHireReason, setNoHireReason] = useState("");
+  const [noHireColour, setNoHireColour] = useState("GREEN");
+  const [noHireTarget, setNoHireTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const { data: resignations, refetch: refetchResignations } = useQuery({
     queryKey: ["resignations"],
-    queryFn: listResignations,
+    queryFn: () => listResignations("APPROVED"),
     enabled: showTypeModal,
   });
 
-  const approvedResignations = resignations?.filter((r) => r.status === "REPLACED") ?? [];
+  const approvedResignations = resignations ?? [];
+  const selectedResignation = approvedResignations.find((r) => r.id === selectedResignationId);
 
-  const handleDelete = (id: string) => {
-    setConfirmDeleteId(id);
+  const decideNoHire = async () => {
+    if (!noHireTarget) return;
+    try {
+      await decideResignation(noHireTarget.id, "NO_HIRE", noHireReason, noHireColour);
+      alert(`Replacement recorded as NO HIRE for ${noHireTarget.name}.`);
+      setNoHireTarget(null);
+      setNoHireReason("");
+      refetchResignations();
+    } catch (e) {
+      alert(`Failed: ${(e as Error).message}`);
+    }
   };
 
   const handleRaiseSubmit = () => {
@@ -44,25 +57,24 @@ export function RaiseListPage() {
     let costCentre = user?.costCentre ?? "";
     let division = user?.department ?? "";
     let jobTitle = "";
+    let resignationId: string | undefined = undefined;
 
-    if (positionType === "REPLACEMENT") {
-      const res = approvedResignations.find((r) => r.id === selectedResignationId);
-      if (res) {
-        costCentre = res.bu || costCentre;
-        division = res.department || division;
-        jobTitle = `Replacement for ${res.employeeName}`;
-        replacementDetails = {
-          exEmployeeId: res.employeeId,
-          exEmployeeName: res.employeeName,
-          exEmployeeEmail: res.employeeEmail,
-          exEmployeePhone: res.employeePhone,
-          bu: res.bu,
-          department: res.department,
-          lastSalary: res.lastSalary,
-          reasonForLeaving: res.reasonForLeaving || "Resigned",
-          colourCode: res.colourCode || "GREEN",
-        };
-      }
+    if (positionType === "REPLACEMENT" && selectedResignation) {
+      costCentre = selectedResignation.costCentreId || selectedResignation.bu || costCentre;
+      division = selectedResignation.department || division;
+      jobTitle = selectedResignation.jobTitle || `Replacement for ${selectedResignation.employeeName}`;
+      resignationId = selectedResignation.id;
+      replacementDetails = {
+        exEmployeeId: selectedResignation.employeeId,
+        exEmployeeName: selectedResignation.employeeName,
+        exEmployeeEmail: selectedResignation.employeeEmail,
+        exEmployeePhone: selectedResignation.employeePhone,
+        bu: selectedResignation.bu,
+        department: selectedResignation.department,
+        lastSalary: selectedResignation.lastSalary,
+        reasonForLeaving: selectedResignation.reasonForLeaving || "Resigned",
+        colourCode: selectedResignation.colourCode || "GREEN",
+      };
     }
 
     const input = {
@@ -74,7 +86,7 @@ export function RaiseListPage() {
       reportingManager: "",
       jd: "",
       requiredSkills: [] as string[],
-      salaryRange: { min: 0, max: 0, currency: "INR" },
+      salaryRange: { min: 0, max: selectedResignation?.lastSalary || 0, currency: "INR" },
       requiredStartDate: new Date().toISOString(),
       shiftTime: "",
       shiftDays: [] as string[],
@@ -85,6 +97,7 @@ export function RaiseListPage() {
       approvalSkipped: false,
       mrfTemplateId: "",
       replacementDetails,
+      resignationId,
     };
 
     createDraft.mutate(input, {
@@ -131,7 +144,7 @@ export function RaiseListPage() {
             </h2>
             <div className="space-y-3">
               {drafts.map((p) => (
-                <DraftRow key={p.id} position={p} onEdit={() => navigate(`/raise/${p.id}`)} onDelete={() => handleDelete(p.id!)} />
+                <DraftRow key={p.id} position={p} onEdit={() => navigate(`/raise/${p.id}`)} onDelete={() => {}} />
               ))}
               {drafts.length === 0 && <p className="text-sm text-slate-400">No drafts.</p>}
             </div>
@@ -189,76 +202,109 @@ export function RaiseListPage() {
           </div>
 
           {positionType === "REPLACEMENT" && (
-            <div className="space-y-2 pt-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Select Approved Resignation</label>
+            <div className="space-y-3 pt-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Approved Resignations</label>
               {approvedResignations.length > 0 ? (
-                <select
-                  value={selectedResignationId}
-                  onChange={(e) => setSelectedResignationId(e.target.value)}
-                  className="w-full rounded border border-slate-300 p-2 text-sm text-slate-750 bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                >
-                  <option value="">Choose resignation...</option>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
                   {approvedResignations.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.employeeName} ({r.employeeId}) · {r.department}
-                    </option>
+                    <div
+                      key={r.id}
+                      className={`rounded-lg border p-3 cursor-pointer transition-all ${
+                        selectedResignationId === r.id
+                          ? "border-brand-600 bg-brand-50/20"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                      onClick={() => setSelectedResignationId(r.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{r.employeeName}</p>
+                          <p className="text-xs text-slate-500">{r.jobTitle} · {r.department}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {r.bu} · Last Salary: ₹{r.lastSalary.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0 ml-3">
+                          <Button
+                            variant="primary"
+                            className="py-0.5 px-2 text-[10px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedResignationId(r.id);
+                              handleRaiseSubmit();
+                            }}
+                          >
+                            Hire
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="py-0.5 px-2 text-[10px] text-rose-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNoHireTarget({ id: r.id, name: r.employeeName });
+                            }}
+                          >
+                            No Hire
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               ) : (
-                <p className="text-xs text-rose-500 font-medium py-1">
-                  No approved resignations available for replacement. You must decide 'Hire' on a resignation first.
+                <p className="text-xs text-slate-500 font-medium py-1">
+                  No approved resignations require a replacement decision yet.
                 </p>
               )}
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button variant="secondary" onClick={() => setShowTypeModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleRaiseSubmit}
-              disabled={
-                createDraft.isPending ||
-                (positionType === "REPLACEMENT" && approvedResignations.length === 0)
-              }
-            >
-              {createDraft.isPending ? "Creating..." : "Create Requisition Draft"}
-            </Button>
-          </div>
+          {positionType === "NEW_HIRE" && (
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button variant="secondary" onClick={() => setShowTypeModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleRaiseSubmit} disabled={createDraft.isPending}>
+                {createDraft.isPending ? "Creating..." : "Create Requisition Draft"}
+              </Button>
+            </div>
+          )}
         </div>
       </Modal>
 
+      {/* No Hire Modal */}
       <Modal
-        open={!!confirmDeleteId}
-        onClose={() => setConfirmDeleteId(null)}
-        title="Delete Requisition Draft"
+        open={!!noHireTarget}
+        onClose={() => setNoHireTarget(null)}
+        title={`No Hire — ${noHireTarget?.name}`}
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">Are you sure you want to delete this draft? This action cannot be undone.</p>
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (confirmDeleteId) {
-                  deleteDraft.mutate(confirmDeleteId, {
-                    onSuccess: () => {
-                      alert("Draft deleted successfully.");
-                      setConfirmDeleteId(null);
-                    },
-                    onError: (e) => {
-                      alert(`Failed to delete draft: ${(e as Error).message}`);
-                      setConfirmDeleteId(null);
-                    },
-                  });
-                }
-              }}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Colour Code</label>
+            <select
+              value={noHireColour}
+              onChange={(e) => setNoHireColour(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 p-2.5 text-sm bg-white"
             >
-              Delete
-            </Button>
+              <option value="GREEN">GREEN — Voluntary</option>
+              <option value="RED">RED — Performance</option>
+              <option value="BLACK">BLACK — Misconduct</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason for Leaving</label>
+            <textarea
+              value={noHireReason}
+              onChange={(e) => setNoHireReason(e.target.value)}
+              placeholder="Provide context..."
+              rows={2}
+              className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <Button variant="secondary" onClick={() => setNoHireTarget(null)}>Cancel</Button>
+            <Button variant="danger" onClick={decideNoHire}>Confirm No Hire</Button>
           </div>
         </div>
       </Modal>

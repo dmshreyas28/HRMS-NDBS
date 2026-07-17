@@ -19,6 +19,7 @@ import { AdminTemplatesPage } from "./pages/admin/AdminTemplatesPage";
 import { AdminCostCentresPage } from "./pages/admin/AdminCostCentresPage";
 import { AdminDoaPage } from "./pages/admin/AdminDoaPage";
 import { AdminPositionsPage } from "./pages/admin/AdminPositionsPage";
+import { AdminResignationsPage } from "./pages/admin/AdminResignationsPage";
 import { ToastContainer } from "./components/ToastContainer";
 
 const queryClient = new QueryClient();
@@ -180,6 +181,14 @@ function AuthGate() {
         element={
           <RequireRole roles={["Admin"]}>
             <AdminPositionsPage />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/admin/resignations"
+        element={
+          <RequireRole roles={["Admin"]}>
+            <AdminResignationsPage />
           </RequireRole>
         }
       />

@@ -47,6 +47,7 @@ namespace HRMS.API.DTOs
         public string? ApprovalSkippedReason { get; set; }
         public ReplacementDetailsDto? ReplacementDetails { get; set; }
         public string? MrfTemplateId { get; set; }
+        public string? ResignationId { get; set; }
     }
 
     public class UpdatePositionRequest

@@ -4,8 +4,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { Layout } from "../components/Layout";
 import { useAuthStore } from "../store/authStore";
 import { getHmDashboard, getTaDashboard, getAdminDashboard } from "../api/dashboard";
-import { listResignations, decideResignation, simulateResignation } from "../api/resignations";
-import { createPosition } from "../api/positions";
+import { listResignations, decideResignation, logResignation } from "../api/resignations";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PageHeader, Card, Spinner, EmptyState, Button, Modal } from '../components/ui';
@@ -53,20 +52,22 @@ export function DashboardPage() {
 // ----------------- HIRING MANAGER DASHBOARD -----------------
 function HmDashboard() {
   const queryClient = useQueryClient();
-  const [showSimulateModal, setShowSimulateModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
   const [decisionModalState, setDecisionModalState] = useState<{ id: string; name: string; action: "HIRE" | "NO_HIRE" } | null>(null);
 
   // Decision Form State
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionColour, setDecisionColour] = useState("GREEN");
 
-  // Simulation Form State
-  const [simName, setSimName] = useState("John Doe");
-  const [simEmail, setSimEmail] = useState("john.doe@example.com");
-  const [simPhone, setSimPhone] = useState("+91 9876543210");
-  const [simBu, setSimBu] = useState("CC-001");
-  const [simDept, setSimDept] = useState("Engineering");
-  const [simSalary, setSimSalary] = useState("1200000");
+  // Log Resignation Form State
+  const [logName, setLogName] = useState("");
+  const [logEmail, setLogEmail] = useState("");
+  const [logPhone, setLogPhone] = useState("");
+  const [logBu, setLogBu] = useState("");
+  const [logDept, setLogDept] = useState("Engineering");
+  const [logSalary, setLogSalary] = useState("1200000");
+  const [logJobTitle, setLogJobTitle] = useState("");
+  const [logCostCentreId, setLogCostCentreId] = useState("CC-001");
 
   const { data: dashboard, isLoading: dashLoading, isError: dashError, error: dashErr, refetch: refetchDash } = useQuery({
     queryKey: ["hm-dashboard"],
@@ -75,63 +76,25 @@ function HmDashboard() {
 
   const { data: resignations, isLoading: resignLoading, isError: resignError, error: resignErr, refetch: refetchResign } = useQuery({
     queryKey: ["resignations"],
-    queryFn: listResignations,
+    queryFn: () => listResignations(),
   });
 
-  const simMutation = useMutation({
-    mutationFn: simulateResignation,
+  const logMutation = useMutation({
+    mutationFn: logResignation,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hm-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["resignations"] });
-      setShowSimulateModal(false);
+      setShowLogModal(false);
+      setLogName(""); setLogEmail(""); setLogPhone("");
+      setLogBu(""); setLogDept("Engineering"); setLogSalary("1200000");
+      setLogJobTitle(""); setLogCostCentreId("CC-001");
     },
-    onError: (e) => alert(`Simulation failed: ${(e as Error).message}`),
+    onError: (e) => alert(`Failed to log resignation: ${(e as Error).message}`),
   });
 
   const decideMutation = useMutation({
-    mutationFn: async ({ id, decision, reason, colour }: { id: string; decision: "HIRE" | "NO_HIRE"; reason: string; colour: string }) => {
-      const res = await decideResignation(id, decision, reason, colour);
-      if (decision === "HIRE") {
-        const user = useAuthStore.getState().user;
-        const draftInput: import('../api/positions').CreatePositionInput = {
-          positionType: "REPLACEMENT",
-          costCentre: res.bu || "CC-001",
-          jobCode: "",
-          division: res.department || "Engineering",
-          jobTitle: `Replacement for ${res.employeeName}`,
-          reportingManager: user?.name || "Hiring Manager",
-          jd: "Replacement position raised from approved resignation.",
-          requiredSkills: [],
-          salaryRange: { min: 0, max: res.lastSalary, currency: "INR" },
-          requiredStartDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
-          location: "On-site",
-          experienceLevel: "Mid",
-          shiftTime: "General",
-          shiftDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-          sittingPlace: "TBD",
-          impactIfUnfilled: "Immediate replacement required to handle ongoing support.",
-          approvalSkipped: false,
-          reviewerId: "",
-          mrfTemplateId: "",
-          replacementDetails: {
-            exEmployeeId: res.employeeId,
-            exEmployeeName: res.employeeName,
-            exEmployeeEmail: res.employeeEmail,
-            exEmployeePhone: res.employeePhone,
-            bu: res.bu,
-            department: res.department,
-            lastSalary: res.lastSalary,
-            reasonForLeaving: res.reasonForLeaving,
-            colourCode: res.colourCode,
-          },
-        };
-        const newPos = await createPosition(draftInput);
-        alert(`Replacement MRF created as Draft! Navigating to complete details.`);
-        window.location.hash = `#/raise/${newPos.id}`;
-      } else {
-        alert("Replacement decision logged as NO HIRE.");
-      }
-    },
+    mutationFn: ({ id, decision, reason, colour }: { id: string; decision: "HIRE" | "NO_HIRE"; reason: string; colour: string }) =>
+      decideResignation(id, decision, reason, colour),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hm-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["resignations"] });
@@ -141,18 +104,17 @@ function HmDashboard() {
     onError: (e) => alert(`Decision failed: ${(e as Error).message}`),
   });
 
-  const handleSimulateSubmit = (e: React.FormEvent) => {
+  const handleLogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const dbUser = useAuthStore.getState().user;
-    simMutation.mutate({
-      employeeId: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-      employeeName: simName,
-      employeeEmail: simEmail,
-      employeePhone: simPhone,
-      bu: simBu,
-      department: simDept,
-      lastSalary: Number(simSalary),
-      managerId: dbUser?.id || "",
+    logMutation.mutate({
+      employeeName: logName,
+      employeeEmail: logEmail,
+      employeePhone: logPhone,
+      bu: logBu,
+      department: logDept,
+      lastSalary: Number(logSalary),
+      jobTitle: logJobTitle,
+      costCentreId: logCostCentreId,
     });
   };
 
@@ -191,7 +153,8 @@ function HmDashboard() {
   }
 
   const c = dashboard?.counts || { draft: 0, pending: 0, approved: 0, posted: 0, onHold: 0, filled: 0, collapsed: 0 };
-  const pendingResignationsList = resignations?.filter((r) => r.status === "PENDING_ACTION") ?? [];
+  const pendingApprovalList = resignations?.filter((r) => r.status === "PENDING_APPROVAL") ?? [];
+  const approvedList = resignations?.filter((r) => r.status === "APPROVED") ?? [];
 
   return (
     <Layout>
@@ -199,8 +162,8 @@ function HmDashboard() {
         title="Dashboard" 
         subtitle="Your hiring activity at a glance" 
         actions={
-          <Button variant="primary" onClick={() => setShowSimulateModal(true)}>
-            Simulate Resignation
+          <Button variant="primary" onClick={() => setShowLogModal(true)}>
+            Log Employee Resignation
           </Button>
         }
       />
@@ -219,17 +182,39 @@ function HmDashboard() {
           ))}
         </div>
 
-        {/* Resignations Replacement Card */}
+        {/* Pending Approval Resignations */}
         <Card className="p-5">
-          <h3 className="font-semibold text-slate-900 mb-3">Approved Resignations (Awaiting Replacement Decision)</h3>
-          {pendingResignationsList.length === 0 ? (
-            <EmptyState title="No pending resignations" hint="Your direct reports are in good standing." />
+          <h3 className="font-semibold text-slate-900 mb-3">Pending Approval (Awaiting Admin Review)</h3>
+          {pendingApprovalList.length === 0 ? (
+            <EmptyState title="No pending approvals" hint="Logged resignations appear here until an admin approves or rejects them." />
           ) : (
             <div className="divide-y divide-slate-100">
-              {pendingResignationsList.map((res) => (
+              {pendingApprovalList.map((res) => (
                 <div key={res.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
                   <div>
-                    <p className="font-medium text-slate-800 text-sm">{res.employeeName}</p>
+                    <p className="font-medium text-slate-800 text-sm">{res.employeeName} · {res.jobTitle}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {res.bu} · {res.department} · Last Salary: ₹{res.lastSalary.toLocaleString()}
+                    </p>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold">Awaiting Admin</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Approved Resignations (Replacement Decision) */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-slate-900 mb-3">Approved Resignations (Awaiting Replacement Decision)</h3>
+          {approvedList.length === 0 ? (
+            <EmptyState title="No approved resignations" hint="Once an admin approves a resignation, you can decide to hire a replacement here." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {approvedList.map((res) => (
+                <div key={res.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-slate-800 text-sm">{res.employeeName} · {res.jobTitle}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {res.bu} · {res.department} · Last Salary: ₹{res.lastSalary.toLocaleString()}
                     </p>
@@ -298,12 +283,14 @@ function HmDashboard() {
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-500">
-            Confirm your decision. Ticking "Hire Replacement" will open the Replacement manpower requisition form.
+            {decisionModalState?.action === "HIRE"
+              ? "Confirming 'Hire Replacement' logs the decision. Then go to Raise Requisition → Replacement to create the MRF."
+              : "Confirm 'No Hire' to close this replacement request permanently."}
           </p>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Colour Coding (Required)</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Colour Coding</label>
               <select
                 value={decisionColour}
                 onChange={(e) => setDecisionColour(e.target.value)}
@@ -316,7 +303,7 @@ function HmDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason for Departure / Leaving</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reason for Departure</label>
               <textarea
                 value={decisionReason}
                 onChange={(e) => setDecisionReason(e.target.value)}
@@ -342,44 +329,52 @@ function HmDashboard() {
         </div>
       </Modal>
 
-      {/* Simulation Modal */}
-      <Modal open={showSimulateModal} onClose={() => setShowSimulateModal(false)} title="Simulate Resignation Approval">
-        <form onSubmit={handleSimulateSubmit} className="space-y-4">
-          <p className="text-xs text-slate-400">Trigger an approved resignation inside the system to populate the HM's replacement queue.</p>
+      {/* Log Resignation Modal */}
+      <Modal open={showLogModal} onClose={() => setShowLogModal(false)} title="Log Employee Resignation">
+        <form onSubmit={handleLogSubmit} className="space-y-4">
+          <p className="text-xs text-slate-400">Submit a resignation record for admin approval.</p>
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="col-span-2">
               <label className="block text-xs font-bold text-slate-500 mb-1">Employee Name</label>
-              <input value={simName} onChange={(e) => setSimName(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <input value={logName} onChange={(e) => setLogName(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
-              <input value={simEmail} onChange={(e) => setSimEmail(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <input value={logEmail} onChange={(e) => setLogEmail(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Phone</label>
-              <input value={simPhone} onChange={(e) => setSimPhone(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <input value={logPhone} onChange={(e) => setLogPhone(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">BU</label>
-              <input value={simBu} onChange={(e) => setSimBu(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <label className="block text-xs font-bold text-slate-500 mb-1">BU / Cost Centre</label>
+              <input value={logBu} onChange={(e) => setLogBu(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Department</label>
-              <input value={simDept} onChange={(e) => setSimDept(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <input value={logDept} onChange={(e) => setLogDept(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
             <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1">Job Title</label>
+              <input value={logJobTitle} onChange={(e) => setLogJobTitle(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" placeholder="e.g. Senior Software Engineer" required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Cost Centre ID</label>
+              <input value={logCostCentreId} onChange={(e) => setLogCostCentreId(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+            </div>
+            <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Last Salary (Annual INR)</label>
-              <input type="number" value={simSalary} onChange={(e) => setSimSalary(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
+              <input type="number" value={logSalary} onChange={(e) => setLogSalary(e.target.value)} className="w-full rounded border border-slate-300 p-2 text-sm" required />
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t">
-            <Button variant="secondary" onClick={() => setShowSimulateModal(false)}>
+            <Button variant="secondary" onClick={() => setShowLogModal(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={simMutation.isPending}>
-              {simMutation.isPending ? "Creating..." : "Submit Simulation"}
+            <Button type="submit" variant="primary" disabled={logMutation.isPending}>
+              {logMutation.isPending ? "Submitting..." : "Log Resignation"}
             </Button>
           </div>
         </form>
