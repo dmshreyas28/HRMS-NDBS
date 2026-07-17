@@ -140,11 +140,13 @@ namespace HRMS.API.Services
 
             await _positionRepo.CreateAsync(position);
 
-            // If this was created from an approved resignation, mark it as REPLACED atomically
+            // If this was created from an approved resignation owned by this HM,
+            // create the position first, then update the resignation afterwards
+            // (standalone MongoDB — no multi-document transaction available).
             if (!string.IsNullOrWhiteSpace(request.ResignationId))
             {
                 var resignation = await _resignationRepo.GetByIdAsync(request.ResignationId);
-                if (resignation != null && resignation.Status == "APPROVED")
+                if (resignation != null && resignation.Status == "APPROVED" && resignation.ManagerId == raisedByUserId)
                 {
                     resignation.Status = "REPLACED";
                     resignation.ReplacementPositionId = position.Id;

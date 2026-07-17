@@ -125,6 +125,10 @@ namespace HRMS.API.Controllers
             if (resignation == null)
                 return NotFound(ApiResponse.Fail("Resignation not found."));
 
+            var userId = await GetCurrentMongoUserIdAsync(_userRepo);
+            if (resignation.ManagerId != userId)
+                return Forbid();
+
             if (resignation.Status != "APPROVED")
                 return Conflict(ApiResponse.Fail("Only approved resignations can be decided for replacement."));
 
