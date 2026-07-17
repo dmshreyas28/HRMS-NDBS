@@ -72,7 +72,7 @@ namespace HRMS.API.DTOs
 
     public class SubmitPositionRequest
     {
-        public string ReviewerId { get; set; } = null!;
+        public string? ReviewerId { get; set; }
         public bool ApprovalSkipped { get; set; }
         public string? ApprovalSkippedReason { get; set; }
     }
