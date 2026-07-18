@@ -20,6 +20,7 @@ namespace HRMS.API.Services
         Task<Position> PlaceOnHoldAsync(string id, int durationDays, string actorUserId);
         Task<Position> ReleaseHoldAsync(string id, string actorUserId);
         Task<Position> PostJobAsync(string id, string actorUserId);
+        Task<Position> ReopenPositionAsync(string id, string actorUserId);
         Task<Position> AutoClosePositionAsync(string id, string actorUserId);
         Task UpdateReviewerEmailDraftAsync(string id, string draft, string actorUserId);
         Task SendReviewerEmailAsync(string id, string actorUserId);
@@ -472,6 +473,39 @@ namespace HRMS.API.Services
                 FromStatus = oldStatus.ToString(),
                 ToStatus = position.Status.ToString(),
                 Notes = "Job vacancy marked as posted."
+            });
+
+            await _positionRepo.UpdateAsync(id, position);
+            return position;
+        }
+
+        public async Task<Position> ReopenPositionAsync(string id, string actorUserId)
+        {
+            var position = await GetByIdAsync(id);
+            if (position.Status != PositionStatus.COLLAPSED)
+                throw new InvalidOperationException("Only collapsed positions can be reopened.");
+
+            var oldStatus = position.Status;
+            var targetStatus = PositionStatus.APPROVED;
+            if (!string.IsNullOrWhiteSpace(position.PreCollapseStatus)
+                && Enum.TryParse<PositionStatus>(position.PreCollapseStatus, out var parsed))
+            {
+                targetStatus = parsed;
+            }
+
+            position.Status = targetStatus;
+            position.PreCollapseStatus = null;
+            position.LastHMActionAt = DateTime.UtcNow;
+            position.UpdatedAt = DateTime.UtcNow;
+
+            position.AuditLog.Add(new AuditLogEntry
+            {
+                Action = "Reopen",
+                ActorId = actorUserId,
+                Timestamp = DateTime.UtcNow,
+                FromStatus = oldStatus.ToString(),
+                ToStatus = position.Status.ToString(),
+                Notes = $"Position reopened from collapsed state. Restored to {position.Status}."
             });
 
             await _positionRepo.UpdateAsync(id, position);

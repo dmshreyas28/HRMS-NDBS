@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "../../components/Layout";
-import { listPositions } from "../../api/positions";
+import { listPositions, reopenPosition } from "../../api/positions";
 import { useCostCentres } from "../../hooks/useCostCentres";
 import { listUsers } from "../../api/users";
 import { Link } from "react-router-dom";
@@ -11,6 +11,7 @@ import { PageHeader, Card, Spinner, EmptyState, Button, Select } from '../../com
 export function AdminPositionsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [costCentreFilter, setCostCentreFilter] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: positions, isLoading: positionsLoading } = useQuery({
     queryKey: ["admin-all-positions"],
@@ -27,6 +28,15 @@ export function AdminPositionsPage() {
     const u = users?.find((user) => user.id === userId);
     return u ? u.name : userId;
   };
+
+  const reopenMutation = useMutation({
+    mutationFn: reopenPosition,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-all-positions"] });
+      alert("Position reopened successfully.");
+    },
+    onError: (e) => alert(`Reopen failed: ${(e as Error).message}`),
+  });
 
   const filteredPositions = positions?.filter((p) => {
     const matchesStatus = statusFilter === "" || p.status === statusFilter;
@@ -112,9 +122,20 @@ export function AdminPositionsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{getUserName(p.raisedBy)}</td>
                     <td className="px-4 py-3">
-                      <Link to={`/positions/${p.id}`}>
-                        <Button variant="ghost">Open →</Button>
-                      </Link>
+                      {p.status === "COLLAPSED" ? (
+                        <Button
+                          variant="primary"
+                          onClick={() => reopenMutation.mutate(p.id)}
+                          disabled={reopenMutation.isPending}
+                          className="py-1 px-2.5 text-xs"
+                        >
+                          Reopen
+                        </Button>
+                      ) : (
+                        <Link to={`/positions/${p.id}`}>
+                          <Button variant="ghost">Open →</Button>
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

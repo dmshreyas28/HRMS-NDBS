@@ -205,6 +205,9 @@ namespace HRMS.API.Models
         [BsonElement("collapsedAt")]
         public DateTime? CollapsedAt { get; set; }
 
+        [BsonElement("preCollapseStatus")]
+        public string? PreCollapseStatus { get; set; }
+
         [BsonElement("lastHMActionAt")]
         public DateTime LastHMActionAt { get; set; } = DateTime.UtcNow;
 

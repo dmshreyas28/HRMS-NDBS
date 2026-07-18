@@ -116,6 +116,14 @@ namespace HRMS.API.Controllers
             return Ok(ApiResponse<Position>.Ok(position));
         }
 
+        [HttpPost("{id}/reopen")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> Reopen(string id)
+        {
+            var position = await _positionService.ReopenPositionAsync(id, await GetCurrentMongoUserIdAsync(_userRepo));
+            return Ok(ApiResponse<Position>.Ok(position));
+        }
+
         [HttpPatch("{id}/reviewer-email")]
         [Authorize(Policy = "TAOnly")]
         public async Task<IActionResult> UpdateReviewerEmail(string id, [FromBody] UpdateReviewerEmailRequest request)

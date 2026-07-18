@@ -8,7 +8,7 @@ namespace HRMS.API.Services
 {
     public interface INotificationService
     {
-        Task SendNotificationAsync(string recipientId, NotificationType type, string positionId, string message, NotificationChannel channel = NotificationChannel.IN_APP);
+        Task SendNotificationAsync(string recipientId, NotificationType type, string? positionId, string message, NotificationChannel channel = NotificationChannel.IN_APP);
         Task<List<Notification>> GetUserNotificationsAsync(string userId);
         Task MarkAsReadAsync(string notificationId, string userId);
         Task MarkAllAsReadAsync(string userId);
@@ -25,7 +25,7 @@ namespace HRMS.API.Services
             _userRepo = userRepo;
         }
 
-        public async Task SendNotificationAsync(string recipientId, NotificationType type, string positionId, string message, NotificationChannel channel = NotificationChannel.IN_APP)
+        public async Task SendNotificationAsync(string recipientId, NotificationType type, string? positionId, string message, NotificationChannel channel = NotificationChannel.IN_APP)
         {
             if (recipientId == "hr_ta_group")
             {
@@ -55,7 +55,7 @@ namespace HRMS.API.Services
             }
         }
 
-        private async Task SendIndividualNotificationAsync(string recipientId, NotificationType type, string positionId, string message, NotificationChannel channel)
+        private async Task SendIndividualNotificationAsync(string recipientId, NotificationType type, string? positionId, string message, NotificationChannel channel)
         {
             var notification = new Notification
             {

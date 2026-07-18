@@ -38,8 +38,7 @@ namespace HRMS.API.Models
         public NotificationType Type { get; set; }
 
         [BsonElement("positionId")]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string PositionId { get; set; } = null!;
+        public string? PositionId { get; set; }
 
         [BsonElement("message")]
         public string Message { get; set; } = null!;

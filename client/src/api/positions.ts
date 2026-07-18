@@ -34,6 +34,7 @@ export function rejectPosition(id: string, reason: string): Promise<Position> { 
 export function holdPosition(id: string, durationDays: number): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/hold`, { durationDays }); }
 export function releaseHoldPosition(id: string): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/release-hold`); }
 export function postJob(id: string): Promise<Position> { return api.patch<Position>(`/api/positions/${id}/post`); }
+export function reopenPosition(id: string): Promise<Position> { return api.post<Position>(`/api/positions/${id}/reopen`, {}); }
 
 export function saveReviewerEmailDraft(id: string, draft: string): Promise<Position> {
   return api.patch<Position>(`/api/positions/${id}/reviewer-email`, { draft });

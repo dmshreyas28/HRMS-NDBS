@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using HRMS.API.DTOs;
 using HRMS.API.Models;
 using HRMS.API.Repositories;
+using HRMS.API.Services;
 
 namespace HRMS.API.Controllers
 {
@@ -40,11 +41,13 @@ namespace HRMS.API.Controllers
     {
         private readonly ResignationRepository _resignationRepo;
         private readonly IUserRepository _userRepo;
+        private readonly INotificationService _notificationService;
 
-        public ResignationsController(ResignationRepository resignationRepo, IUserRepository userRepo)
+        public ResignationsController(ResignationRepository resignationRepo, IUserRepository userRepo, INotificationService notificationService)
         {
             _resignationRepo = resignationRepo;
             _userRepo = userRepo;
+            _notificationService = notificationService;
         }
 
         [HttpGet]
@@ -115,6 +118,18 @@ namespace HRMS.API.Controllers
 
             resignation.Status = request.Approved ? "APPROVED" : "REJECTED";
             await _resignationRepo.UpdateAsync(id, resignation);
+
+            var message = request.Approved
+                ? $"{resignation.EmployeeName}'s resignation has been approved. Decide whether to raise a replacement position."
+                : $"{resignation.EmployeeName}'s resignation was not approved.";
+
+            await _notificationService.SendNotificationAsync(
+                resignation.ManagerId,
+                NotificationType.RESIGNATION_ACTION,
+                null,
+                message
+            );
+
             return Ok(ApiResponse<Resignation>.Ok(resignation));
         }
 

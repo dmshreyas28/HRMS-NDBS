@@ -166,6 +166,7 @@ namespace HRMS.API.Jobs
                 {
                     var oldStatus = pos.Status;
                     pos.Status = PositionStatus.COLLAPSED;
+                    pos.PreCollapseStatus = oldStatus.ToString();
                     pos.CollapsedAt = DateTime.UtcNow;
                     pos.UpdatedAt = DateTime.UtcNow;
 
