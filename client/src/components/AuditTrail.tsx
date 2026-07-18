@@ -1,15 +1,5 @@
 import type { AuditLogEntry } from "../types/models";
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDateTime } from "../utils/constants";
 
 export function AuditTrail({ entries }: { entries: AuditLogEntry[] }) {
   if (entries.length === 0) {
@@ -31,7 +21,7 @@ export function AuditTrail({ entries }: { entries: AuditLogEntry[] }) {
               <span className="text-gray-500"> · {e.fromStatus} → {e.toStatus}</span>
             </p>
             <p className="text-xs text-gray-500">
-              {formatDate(e.timestamp)} · by {e.actorId}
+              {formatDateTime(e.timestamp)} · by {e.actorId}
             </p>
             {e.notes && <p className="mt-0.5 text-xs text-gray-600">{e.notes}</p>}
           </div>

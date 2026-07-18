@@ -12,10 +12,6 @@ export function listDoa(): Promise<DoAEntry[]> {
   return api.get<DoAEntry[]>("/api/doa");
 }
 
-export function getDoa(id: string): Promise<DoAEntry> {
-  return api.get<DoAEntry>(`/api/doa/${id}`);
-}
-
 export function createDoa(entry: Omit<DoAEntry, "id">): Promise<DoAEntry> {
   return api.post<DoAEntry>("/api/doa", entry);
 }

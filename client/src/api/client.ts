@@ -1,7 +1,6 @@
 import type { ApiResponse } from "../types/models";
 
 export const API_BASE_URL = "http://localhost:5000";
-const BASE_URL = API_BASE_URL;
 
 let tokenGetter: (() => Promise<string>) | null = null;
 
@@ -41,7 +40,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set("Authorization", `Bearer ${token}`);
   }
   
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (res.status === 401) throw new ApiError(401, "Unauthorized. Please log in again.");
   if (res.status === 404) throw new ApiError(404, "Not found.");
   

@@ -7,7 +7,7 @@ using HRMS.API.Services;
 
 namespace HRMS.API.Repositories
 {
-    public class MongoRepository<T> : IRepository<T> where T : class
+    public class MongoRepository<T> where T : class
     {
         protected readonly IMongoCollection<T> _collection;
 

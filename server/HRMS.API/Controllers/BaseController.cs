@@ -25,7 +25,7 @@ namespace HRMS.API.Controllers
             }
         }
 
-        protected async Task<User> GetCurrentUserAsync(IUserRepository userRepo)
+        private async Task<User> GetCurrentUserAsync(IUserRepository userRepo)
         {
             var auth0Id = CurrentUserAuth0Id;
             var user = await userRepo.GetByAuth0IdAsync(auth0Id);

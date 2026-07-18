@@ -28,10 +28,6 @@ export function createCandidate(positionId: string, input: { fullName: string; e
   return api.post<Candidate>(`/api/positions/${positionId}/candidates`, input);
 }
 
-export function updateCandidate(positionId: string, id: string, input: { fullName: string; email: string; phone: string; source: string }): Promise<Candidate> {
-  return api.patch<Candidate>(`/api/positions/${positionId}/candidates/${id}`, input);
-}
-
 export function transitionCandidateStage(positionId: string, id: string, stage: string, notes: string): Promise<Candidate> {
   return api.patch<Candidate>(`/api/positions/${positionId}/candidates/${id}/stage`, { stage, notes });
 }

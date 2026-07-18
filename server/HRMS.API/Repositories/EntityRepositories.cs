@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System;
+using System.Linq.Expressions;
 using MongoDB.Driver;
 using HRMS.API.Models;
 using HRMS.API.Services;
@@ -15,8 +17,16 @@ namespace HRMS.API.Repositories
     }
 
     // USER REPOSITORY
-    public interface IUserRepository : IRepository<User>
+    public interface IUserRepository
     {
+        Task<List<User>> GetAllAsync();
+        Task<User?> GetByIdAsync(string id);
+        Task<List<User>> FindAsync(Expression<Func<User, bool>> filterExpression);
+        Task CreateAsync(User entity);
+        Task UpdateAsync(string id, User entity);
+        Task DeleteAsync(string id);
+        Task<long> CountAsync();
+        Task<long> CountAsync(Expression<Func<User, bool>> filterExpression);
         Task<User?> GetByAuth0IdAsync(string auth0Id);
         Task<System.Collections.Generic.Dictionary<string, int>> GetUsersRoleBreakdownAsync();
     }
@@ -51,8 +61,16 @@ namespace HRMS.API.Repositories
     }
 
     // POSITION REPOSITORY
-    public interface IPositionRepository : IRepository<Position>
+    public interface IPositionRepository
     {
+        Task<List<Position>> GetAllAsync();
+        Task<Position?> GetByIdAsync(string id);
+        Task<List<Position>> FindAsync(Expression<Func<Position, bool>> filterExpression);
+        Task CreateAsync(Position entity);
+        Task UpdateAsync(string id, Position entity);
+        Task DeleteAsync(string id);
+        Task<long> CountAsync();
+        Task<long> CountAsync(Expression<Func<Position, bool>> filterExpression);
         Task<System.Collections.Generic.Dictionary<string, int>> GetStatusBreakdownAsync();
         Task<System.Collections.Generic.Dictionary<string, int>> GetHmStatusBreakdownAsync(string hmUserId);
     }
@@ -100,8 +118,16 @@ namespace HRMS.API.Repositories
     }
 
     // CANDIDATE REPOSITORY
-    public interface ICandidateRepository : IRepository<Candidate>
+    public interface ICandidateRepository
     {
+        Task<List<Candidate>> GetAllAsync();
+        Task<Candidate?> GetByIdAsync(string id);
+        Task<List<Candidate>> FindAsync(Expression<Func<Candidate, bool>> filterExpression);
+        Task CreateAsync(Candidate entity);
+        Task UpdateAsync(string id, Candidate entity);
+        Task DeleteAsync(string id);
+        Task<long> CountAsync();
+        Task<long> CountAsync(Expression<Func<Candidate, bool>> filterExpression);
         Task<System.Collections.Generic.List<CandidateStageCount>> GetStageCountsGroupedByPositionAsync();
     }
 
