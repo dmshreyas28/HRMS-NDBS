@@ -1,768 +1,359 @@
 # HRMS — Talent Acquisition Platform
 
+A structured system for raising, reviewing, approving, and filling headcount requisitions. Built as a modern web application with a React frontend and an ASP.NET Core backend, backed by MongoDB.
+
 ## Table of Contents
 
 1. [Overview](#1-overview)
 2. [Architecture](#2-architecture)
 3. [Prerequisites](#3-prerequisites)
-4. [Quick Start (Docker)](#4-quick-start-docker)
-5. [Local Development Setup](#5-local-development-setup)
-6. [Configuration Reference](#6-configuration-reference)
-7. [Seed Data & Test Accounts](#7-seed-data--test-accounts)
-8. [User Roles & Permissions](#8-user-roles--permissions)
-9. [Platform Features](#9-platform-features)
-   - [Authentication](#91-authentication)
-   - [Manpower Requisition (MRF)](#92-manpower-requisition-mrf)
-   - [Position Lifecycle & State Machine](#93-position-lifecycle--state-machine)
-   - [Approval Workflow](#94-approval-workflow)
-   - [Job Posting](#95-job-posting)
-   - [ATS — Candidate Pipeline](#96-ats--candidate-pipeline)
-   - [Notifications](#97-notifications)
-   - [Background Jobs (Hangfire)](#98-background-jobs-hangfire)
-   - [Dashboard](#99-dashboard)
-   - [Admin Panel](#910-admin-panel)
-10. [API Reference](#10-api-reference)
-11. [Project Structure](#11-project-structure)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Future Enhancements](#13-future-enhancements)
+4. [Quick Start](#4-quick-start)
+5. [Configuration Reference](#5-configuration-reference)
+6. [Seed Data & Test Accounts](#6-seed-data--test-accounts)
+7. [User Roles & Permissions](#7-user-roles--permissions)
+8. [Platform Features](#8-platform-features)
+9. [Project Structure](#9-project-structure)
 
 ---
 
 ## 1. Overview
 
-The HRMS Talent Acquisition Platform is a full-stack web application for managing the entire recruitment lifecycle — from raising a Manpower Requisition Form (MRF), through approval workflows, to posting jobs and tracking candidates through an ATS pipeline.
+HRMS Talent Acquisition replaces email/papers/slack-based headcount requests with a structured workflow. Three types of users interact with the platform:
 
-**Tech Stack:**
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19 + TypeScript + Vite + Tailwind CSS |
-| State Management | Zustand (persisted) + React Query |
-| Backend API | C# .NET 9 (ASP.NET Core) |
-| Database | MongoDB 7.0 |
-| Auth | Auth0 OAuth 2.0 (OpenID Connect) |
-| Background Jobs | Hangfire with MongoDB storage |
-| Reverse Proxy | Nginx (production) / Vite proxy (dev) |
-| Deployment | Docker Compose |
+| Role | What they do |
+|------|-------------|
+| **Hiring Manager (HM)** | Raises new hire requisitions, logs employee resignations, decides whether to hire replacements, fills MRF forms, submits for approval |
+| **HR / Talent Acquisition (HR_TA)** | Reviews pending approvals, posts approved positions to job boards, manages the candidate (ATS) pipeline for each position |
+| **Admin** | Approves/rejects resignation requests, approves/rejects position requisitions, manages users/cost centres/MRF templates/DoA list, reopens collapsed positions, seeds the database |
 
 ---
 
 ## 2. Architecture
 
+| Layer | Technology | Version |
+|--------|-----------|---------|
+| **Frontend** | React 19, TypeScript 6, Vite 8, Tailwind CSS 3 | `client/` |
+| **State management** | Zustand 5 (auth store, toast store), React Query 5 (server state) | |
+| **Routing** | React Router 7 | |
+| **Auth** | Auth0 (JWT-based), `@auth0/auth0-react` 2 | |
+| **Backend** | ASP.NET Core 9, C# | `server/HRMS.API/` |
+| **Database** | MongoDB 3.9 driver | |
+| **Background jobs** | Hangfire 1.8 (backed by MongoDB) | |
+| **Validation** | FluentValidation 11 | |
+| **HTTP** | Frontend uses native `fetch()` via a thin wrapper (`api/client.ts`); server is a REST API returning JSON envelopes `{ success, data, error }` | |
+
+### How the pieces connect
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Browser / Client                       │
-│           React 19 SPA (Vite + Tailwind)                 │
-└──────────────────┬──────────────────────────────────────┘
-                   │ HTTP (proxied in dev, or nginx)
-┌──────────────────▼──────────────────────────────────────┐
-│                  Nginx (port 80)                          │
-│    /api/*  → api:5000     /uploads/* → api:5000          │
-│    /*      → serve dist/index.html  (SPA fallback)        │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────────────────┐
-│              .NET 9 API (port 5000)                      │
-│  ┌─────────┐ ┌────────────┐ ┌──────────────┐            │
-│  │ Auth0   │ │ Controllers │ │ Hangfire    │            │
-│  │ (OAuth)  │ │ (REST API)  │ │ (Recurring) │            │
-│  └────┬─────┘ └──────┬─────┘ └──────┬───────┘            │
-│       │              │               │                    │
-│  ┌────▼──────────────▼───────────────▼───────┐           │
-│  │       Services Layer                       │           │
-│  │ Position │ Candidate │ Auth │ Notification│           │
-│  └────────────────┬──────────────────────────┘           │
-│                   │                                      │
-│  ┌────────────────▼──────────────────────────┐           │
-│  │       Repositories (MongoDB Driver 3.9)    │           │
-│  └────────────────┬──────────────────────────┘           │
-└───────────────────┼─────────────────────────────────────┘
-                    │
-┌───────────────────▼─────────────────────────────────────┐
-│              MongoDB 7.0 (port 27017)                    │
-│  Collections: users, positions, candidates, notifications,│
-│              mrf_templates, cost_centres, doa_entries     │
-│  + Hangfire DB: hrms_hangfire                            │
-└─────────────────────────────────────────────────────────┘
+Browser → Vite dev server (localhost:5173) → React app
+    │
+    ├── Auth0 (login/logout, JWT tokens)
+    │
+    └── ASP.NET Core API (localhost:5000)
+            │
+            ├── JWT Bearer middleware (validates tokens)
+            ├── Controllers (handle HTTP requests)
+            ├── Services (business logic)
+            ├── Repositories (MongoDB data access)
+            └── Hangfire (scheduled background jobs)
 ```
 
 ---
 
 ## 3. Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| **Docker Desktop** (or Docker Engine + Compose) | 20.10+ | Full-stack deployment |
-| **.NET 9 SDK** | 9.0.x | Backend development (local dev only) |
-| **Node.js** | 18 LTS+ | Frontend development (local dev only) |
-| **MongoDB** (optional) | 7.0 | If running outside Docker |
-
-> **For production deployment**, Docker Compose is the recommended approach — it bundles MongoDB, the API, and Nginx in one command.
+- **Node.js** 20+ (for the React frontend)
+- **.NET SDK 9.0** (for the ASP.NET Core backend)
+- **MongoDB** 7+ (local instance, Docker, or Atlas — connection string configurable)
+- **Auth0 account** (free tier works; used for login & role-based access)
 
 ---
 
-## 4. Quick Start (Docker)
+## 4. Quick Start
 
-### 4.1. Build & Launch
+### 4.1 Clone and install
 
 ```bash
-cd "E:\HRMS NDBS"
+cd hrms
 
-# Build frontend (needed for nginx to serve it)
+# Frontend
 cd client
 npm install
-npm run build
-cd ..
 
-# Build and start all services
-docker compose up --build -d
-```
-
-This starts three containers:
-
-| Container | Port | Purpose |
-|-----------|------|---------|
-| `hrms-mongo` | 27017 | MongoDB database |
-| `hrms-api` | 5000 | .NET 9 backend API |
-| `hrms-web` | 80 | Nginx serving frontend + API proxy |
-
-### 4.2. Verify It's Running
-
-1. Open **http://localhost** in your browser
-2. Log in with a test account (see [Section 7](#7-seed-data--test-accounts))
-3. The API automatically seeds data on first startup (cost centres, templates, DoA rules, test users)
-
-### 4.3. Useful Docker Commands
-
-```bash
-# View logs (all services)
-docker compose logs -f
-
-# View API logs only
-docker compose logs -f api
-
-# Rebuild after code changes
-docker compose up --build -d
-
-# Stop everything
-docker compose down
-
-# Stop + delete data volumes (fresh start)
-docker compose down -v
-
-# Restart just the API (after config change)
-docker compose restart api
-```
-
-### 4.4. Volumes
-
-| Volume | Purpose |
-|--------|---------|
-| `mongo-data` | Persists MongoDB data |
-| `uploads-data` | Persists uploaded CV files |
-
----
-
-## 5. Local Development Setup
-
-If you prefer to run services individually (for hot-reload during development):
-
-### 5.1. Start MongoDB
-
-**Option A — Docker:**
-```bash
-docker run -d --name hrms-mongo -p 27017:27017 mongo:7.0
-```
-
-**Option B — Local install:** Install MongoDB 7.0 and ensure it's running on `localhost:27017`.
-
-### 5.2. Start the Backend API
-
-```bash
-cd server/HRMS.API
+# Backend
+cd ../server/HRMS.API
 dotnet restore
-dotnet run
 ```
 
-The API starts on **http://localhost:5000**. Swagger UI is available at **http://localhost:5000/swagger**. Data is seeded automatically on startup.
+### 4.2 Environment variables
 
-### 5.3. Start the Frontend
+Create `client/.env`:
+```env
+VITE_AUTH0_DOMAIN=your-tenant.region.auth0.com
+VITE_AUTH0_CLIENT_ID=your_client_id
+VITE_AUTH0_AUDIENCE=https://hrms-api.example.com
+VITE_API_BASE_URL=http://localhost:5000
+```
+
+Create `server/HRMS.API/appsettings.Development.json`:
+```json
+{
+  "Logging": { "LogLevel": { "Default": "Information" } },
+  "Auth0": {
+    "Domain": "your-tenant.region.auth0.com",
+    "Audience": "https://hrms-api.example.com"
+  },
+  "ConnectionStrings": {
+    "MongoDb": "mongodb://localhost:27017/hrms"
+  }
+}
+```
+
+### 4.3 Auth0 setup
+
+1. Create a **Single Page Application** in your Auth0 tenant.
+2. Set allowed callback/logout URLs to `http://localhost:5173`.
+3. Create an **API** in Auth0 with the identifier matching `VITE_AUTH0_AUDIENCE`.
+4. Add a custom claim to the Auth0 token: `https://hrms.app/roles` — set it per user to one of `HM`, `HR_TA`, or `Admin`.
+5. Add a custom claim `https://hrms.app/userId` — set it to the MongoDB `_id` of the user record (created on first login).
+
+### 4.4 Run
 
 ```bash
+# Terminal 1 — MongoDB (if running locally)
+mongod
+
+# Terminal 2 — Backend
+cd server/HRMS.API
+dotnet run
+
+# Terminal 3 — Frontend
 cd client
-npm install
 npm run dev
 ```
 
-The dev server starts on **http://localhost:5173**. It proxies `/api/*` and `/uploads/*` to the backend automatically.
-
-### 5.4. Access
-
-| URL | What |
-|-----|------|
-| http://localhost:5173 | Frontend (Vite dev server) |
-| http://localhost:5000 | Backend API |
-| http://localhost:5000/swagger | Swagger API docs |
-| http://localhost:5000/hangfire | Hangfire dashboard (background jobs) |
+Open `http://localhost:5173`. Log in as one of the test profiles. As Admin, click **Reset & Seed Database** to populate cost centres, templates, and the DoA list.
 
 ---
 
-## 6. Configuration Reference
+## 5. Configuration Reference
 
-All configuration is managed using `.env` files in the client and server subdirectories.
+### Backend (`appsettings.json` / `appsettings.Development.json`)
 
-### 6.1. Environment Variables Configuration
+| Key | Purpose |
+|-----|---------|
+| `Auth0:Domain` | Your Auth0 tenant domain |
+| `Auth0:Audience` | The API identifier configured in Auth0 |
+| `ConnectionStrings:MongoDb` | MongoDB connection string (database name in the URL) |
 
-The application is configured using `.env` files for both frontend and backend services:
+### Frontend (`client/.env`)
 
-#### Frontend (`client/.env`):
-- `VITE_AUTH0_DOMAIN`: Your Auth0 tenant domain (e.g. `dev-xxx.us.auth0.com`).
-- `VITE_AUTH0_CLIENT_ID`: Your Auth0 Client ID.
-- `VITE_AUTH0_AUDIENCE`: Your Auth0 API Audience identifier (e.g. `https://hrms-api`).
-
-#### Backend (`server/HRMS.API/.env`):
-- `Auth0__Domain`: The Auth0 tenant domain.
-- `Auth0__Audience`: The Auth0 API Audience identifier.
-- `ConnectionStrings__Mongo`: Connection string to MongoDB (e.g. `mongodb://mongo:27017/hrms`).
-
-### 6.2. Database Settings
-
-```json
-{
-  "MongoDB": {
-    "ConnectionString": "mongodb://localhost:27017",  // Docker: "mongodb://mongo:27017"
-    "DatabaseName": "hrms"
-  },
-  "Hangfire": {
-    "MongoConnectionString": "mongodb://localhost:27017",
-    "DatabaseName": "hrms_hangfire"
-  }
-}
-```
-
-### 6.3. CORS Settings
-
-```json
-{
-  "Cors": {
-    "Origin": "http://localhost:5173"  // Production: "http://localhost"
-  }
-}
-```
-
-### 6.4. File Storage
-
-```json
-{
-  "FileStorage": {
-    "Type": "local",        // "local" or "azure-blob"
-    "LocalPath": "./uploads",
-    "AzureBlobConnection": ""
-  }
-}
-```
-
-### 6.5. Notification Settings
-
-```json
-{
-  "Notification": {
-    "EmailProvider": "mock"  // "mock" = console log | future: "smtp", "sendgrid"
-  }
-}
-```
+| Key | Purpose |
+|-----|---------|
+| `VITE_AUTH0_DOMAIN` | Auth0 tenant domain |
+| `VITE_AUTH0_CLIENT_ID` | Auth0 SPA application client ID |
+| `VITE_AUTH0_AUDIENCE` | Auth0 API identifier |
+| `VITE_API_BASE_URL` | Backend base URL (default `http://localhost:5000`) |
 
 ---
 
-## 7. Seed Data & Test Accounts
+## 6. Seed Data & Test Accounts
 
-You can seed the database with initial configurations (Cost Centres, MRF Templates, and DoA thresholds) by logging in as the Admin and clicking the **Reset & Seed Database** button on the Admin Console dashboard, or by triggering the `/api/admin/seed` endpoint.
+On first run, log in as Admin and use the **Reset & Seed Database** button on the Admin Dashboard. This populates:
 
-### 7.1. Demo Profiles (Auth0 Sign-in)
+- **5 Cost Centres**: Engineering (CC-001), Marketing (CC-002), Operations (CC-003), Finance (CC-004), HR (CC-005)
+- **9 MRF Templates**: Pre-filled job title/JD/skills/salary presets for common roles
+- **5 DoA entries**: Approver names/emails/titles
 
-The Auth0 login page provides pre-configured profiles for quick sign-in:
+The login screen shows three demo profiles:
 
-| Profile | Email | Role | Cost Centre |
-|---------|-------|------|-------------|
-| Hiring Manager | `hm@example.com` | HM (Hiring Manager) | Engineering (`CC-001`) |
-| HR/TA Recruiter | `ta@example.com` | HR_TA (HR / Talent Acquisition) | People (`CC-005`) |
-| System Administrator | `admin@example.com` | Admin | People (`CC-005`) |
+| Profile | Email | Role |
+|---------|-------|------|
+| Hiring Manager | `hm@example.com` | HM |
+| HR/TA Recruiter | `ta@example.com` | HR_TA |
+| System Administrator | `admin@example.com` | Admin |
 
-### 7.2. Seed Entities
-
-| Entity | Count | Details |
-|--------|-------|---------|
-| Cost Centres | 5 | Engineering, Marketing, Operations, Finance, Human Resources |
-| MRF Templates | 9 | Pre-filled details including job titles, JDs, and skills for common roles |
-| DoA Entries | 5 | Authority members for approval routing (Priya Sharma, Rahul Mehta, etc.) |
-
-### 7.3. Manual Re-Seed
-
-```powershell
-# Trigger database re-seed via API:
-Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/admin/seed
-```
+These are just `login_hint` values — Auth0 decides which actual email/password to use.
 
 ---
 
-## 8. User Roles & Permissions
+## 7. User Roles & Permissions
 
-| Role | Description | Access |
-|------|-------------|--------|
-| **HM** (Hiring Manager) | Requests positions, manages their pipeline | Raise/edit own MRFs, view own dashboard, manage candidates on own positions |
-| **HR_TA** (HR / Talent Acquisition) | Reviews, approves, posts jobs, manages ATS | Approve/reject MRFs, post jobs, manage all candidates, view TA dashboard |
-| **Admin** | Full system management | All of the above + user management, templates, cost centres, DoA, view admin dashboard |
+Roles are stored as Auth0 custom claims under `https://hrms.app/roles`. The backend maps them via authorization policies defined in `Program.cs`:
 
-### Sidebar Navigation by Role
-
-| Page | HM | HR_TA | Admin |
-|------|:--:|:-----:|:-----:|
-| Dashboard | ✅ | ✅ | ✅ |
-| Raise Position | ✅ | ✅ | ✅ |
-| Positions | ✅ | ✅ | ✅ |
-| ATS Pipeline | ✅ | ✅ | ✅ |
-| Notifications | ✅ | ✅ | ✅ |
-| Users | — | — | ✅ |
-| MRF Templates | — | — | ✅ |
-| Cost Centres | — | — | ✅ |
-| DoA Settings | — | — | ✅ |
-| All Positions | — | — | ✅ |
+| Policy | Allowed roles | Used for |
+|--------|--------------|---------|
+| `HMOnly` | HM | Raising MRFs, logging resignations, deciding replacements |
+| `TAOnly` | HR_TA | Posting jobs |
+| `AdminOnly` | Admin | User management, templates, cost centres, DoA, reopening positions, resignations approval |
+| `HMOrTA` | HM, HR_TA, Admin | Approving/rejecting position requisitions |
 
 ---
 
-## 9. Platform Features
+## 8. Platform Features
 
-### 9.1. Authentication
+### 8.1 Manpower Requisition (MRF)
 
-- **Login page** at `/login` with email + password
-- **Quick-fill buttons** for demo accounts (one-click login)
-- JWT token stored in `localStorage` via Zustand persist
-- Auto-logout on 401 response (expired/invalid token)
-- Token attached to every API request via Axios interceptor
+Hiring Managers raise **New Hire** or **Replacement** requisitions. Each MRF is a `Position` document in MongoDB with a lifecycle tracked by a status field. The form captures job title, cost centre, division, JD, required skills, salary range, start date, shift details, location, experience level, and business impact.
 
-### 9.2. Manpower Requisition (MRF)
-
-Navigate to **Raise Position** (`/positions/new`):
-
-1. **Choose type:** New Hire or Replacement
-2. **For Replacement:** A popup asks if the departed employee should be replaced (Hire) or not (No Hire). If "No Hire", a NoHireForm captures the rationale.
-3. **Select MRF Template:** Auto-fills cost-centre default fields (job title, department, grade, etc.)
-4. **Fill in details:**
-   - Core fields: Title, department, employment type, grade, required start date
-   - Supplementary: Description, responsibilities, qualifications
-   - For Replacement: Departing employee name, colour code (GREEN/RED/BLACK), last working day
-5. **Save as Draft** or **Submit** (sends to PENDING_APPROVAL)
-6. Reviewers are auto-determined from DoA (Delegation of Authority) rules based on salary band
-
-### 9.3. Position Lifecycle & State Machine
+### 8.2 Position Lifecycle (State Machine)
 
 ```
-        ┌──────────────────────┐
-        │       DRAFT          │◄───────────────────┐
-        └──────────┬───────────┘                    │
-                   │ Submit                         │ Reopen
-        ┌──────────▼───────────┐                    │
-        │  PENDING_APPROVAL    │                    │
-        └──────────┬───────────┘                    │
-              ┌────┴────┐                           │
-              ▼         ▼                           │
-        ┌──────────┐  ┌──────────┐                 │
-        │ APPROVED  │  │ REJECTED  │────────────────┘
-        └────┬─────┘  └──────────┘
-             │ Post
-        ┌────▼─────┐
-        │  POSTED   │◄── Release Hold
-        └──┬───┬───┘
-           │   │ Hold
-           │ ┌─▼──────────┐
-           │ │  ON_HOLD    │───► (30-day max, auto-warned)
-           │ └────────────┘
-           │
-           │ HIRED (via ATS)
-        ┌──▼─────┐
-        │ FILLED  │
-        └────────┘
+                    ┌──────────┐
+                    │   DRAFT   │
+                    └────┬─────┘
+                         │ submit
+                    ┌────▼──────────┐
+              ┌─────│PENDING_APPROVAL│─────┐
+              │     └──────┬──────────┘     │
+           approve         │              reject
+              │       skip approval        │
+         ┌────▼──┐    (goes straight       │
+         │APPROVED│     to APPROVED)  ┌────▼───┐
+         └──┬──┬──┘                   │REJECTED│
+            │  │                      └──┬─────┘
+        post│  │ hold              revise│
+    ┌───────▼┐ └──►ON_HOLD──►(release)──┘
+    │ POSTED │
+    └───┬────┘
+        │ candidate hired / auto-close
+   ┌────▼──┐
+   │ FILLED │
+   └────────┘
 
-   COLLAPSED ← 180-day inactivity (auto, with day-150/170 warnings)
+   Any non-terminal status ──180 days inactivity──► COLLAPSED ──admin reopen──► prior status
 ```
 
-**Colour codes** (Replacement positions only):
-| Code | Meaning |
-|------|---------|
-| 🟢 GREEN | Voluntary resignation, good standing |
-| 🔴 RED | Performance-related departure |
-| ⚫ BLACK | Misconduct / involuntary departure |
+**Key transitions:**
+- **Draft → PENDING_APPROVAL**: HM submits the form
+- **PENDING_APPROVAL → APPROVED**: Admin/HR_TA approves (or HM skips approval with a reason)
+- **PENDING_APPROVAL → REJECTED**: Admin/HR_TA rejects with a reason
+- **REJECTED → DRAFT (via "Revise")**: HM can re-open a rejected position and resubmit
+- **APPROVED → POSTED**: HR_TA marks the job as published
+- **POSTED/APPROVED → FILLED**: Candidate hired or auto-closed
+- **Any active → ON_HOLD**: HM places a temporary hold (max 30 days)
+- **ON_HOLD → prior status**: Hold expires or HM releases it
+- **Any active → COLLAPSED**: Auto-collapsed after 180 days of inactivity (Hangfire job)
+- **COLLAPSED → prior status**: Admin reopens (uses stored `preCollapseStatus`)
 
-### 9.4. Approval Workflow
+### 8.3 Resignation / Replacement Workflow
 
-1. HM submits MRF → status becomes `PENDING_APPROVAL`
-2. **Approval Skip:** If the salary falls below the configured DoA threshold, the system auto-approves (skips to `APPROVED`)
-3. HR_TA reviews and either **Approves** or **Rejects**
-4. A **reviewer email draft** is auto-generated (mock emails are logged to console)
-5. Notifications are sent for pending approvals (daily reminder job)
+A 4-state lifecycle manages employee departures and replacement decisions:
 
-### 9.5. Job Posting
+```
+HM logs resignation → PENDING_APPROVAL → Admin approves/Rejects → APPROVED → HM decides HIRE/NO_HIRE
+                                                                     ↓
+                                                                REJECTED (dead end)
+```
 
-After approval, HR_TA clicks **"Post"** to change status to `POSTED`. If not posted within 2 hours, a reminder notification is sent.
+- **HM logs a resignation** via the Dashboard ("Log Employee Resignation" button), providing employee name, email, phone, BU, department, salary, job title, and cost centre. Status starts as `PENDING_APPROVAL`.
+- **Admin reviews** pending resignations on `/admin/resignations`, approves or rejects them. On approval, a `RESIGNATION_ACTION` notification is sent to the HM.
+- **HM sees approved resignations** on the HM Dashboard and in the "Raise Requisition → Replacement" dropdown. From there they can:
+  - **No Hire**: Mark the resignation as `NO_REPLACEMENT` with a colour code (GREEN/RED/BLACK) and reason — no position is created.
+  - **Hire Replacement**: Navigate to a pre-filled MRF form with the resignation's job title, cost centre, department, and salary. Submitting the MRF atomically sets the resignation to `REPLACED` and links the position for traceability.
 
-### 9.6. ATS — Candidate Pipeline
+### 8.4 ATS — Candidate Pipeline
 
-Access via **ATS Pipeline** (`/ats/:positionId`):
+Once a position is posted, HR_TA can manage candidates through a drag-and-drop Kanban board with stages: Applied → Screening → Interview Scheduled → Interview Completed → Offer → Hired. Each stage transition is logged. Interview feedback (rating + notes + interviewer name) and offer details (salary, start date, offer letter status) can be recorded. CV file uploads are supported.
 
-**Kanban Board View** — 8 columns:
-| Stage | Description |
-|-------|-------------|
-| APPLIED | Initial application received |
-| SCREENING | HR screening / shortlisting |
-| INTERVIEW_SCHEDULED | Interview booked |
-| INTERVIEW_COMPLETED | Interview done, feedback added |
-| OFFER | Offer extended to candidate |
-| HIRED | Candidate accepted → **auto-closes position** as FILLED |
-| REJECTED | Candidate rejected |
-| WITHDRAWN | Candidate withdrew |
+### 8.5 Notifications
 
-**Actions per candidate:**
-- Add candidate with name, email, source (REFERRAL, LINKEDIN, JOB_PORTAL, DIRECT, OTHER)
-- Upload CV (PDF/DOC, max 10MB)
-- Move between stages (drag or via menu)
-- Add interview feedback (rating, notes, per-stage)
-- View full candidate detail with offer details, stage history
+In-app notifications appear in the bell icon (top-right header) and on `/notifications`. Types include: approval reminders, job-not-posted reminders, hold expiry warnings, collapse warnings, position approved/rejected/filled, and resignation actions. Notification polling runs every 15 seconds. A Hangfire job sends periodic reminders for pending approvals and stale unposted positions.
 
-### 9.7. Notifications
+### 8.6 Dashboards
 
-- **Bell icon** in the header shows unread count
-- **Dropdown** with recent notifications
-- **Full page** at `/notifications`
-- **Idempotent delivery:** Each notification type uses a deduplication key — recurring jobs won't spam duplicates
+Each role gets a role-specific dashboard:
 
-**Notification types:**
-| Type | Trigger |
-|------|---------|
-| APPROVAL_REMINDER | Daily job: pending approval > 48h |
-| JOB_NOT_POSTED | Every 2h job: approved but not posted |
-| POSITION_HOLD_EXPIRY | Daily: hold expiring within 3 days |
-| COLLAPSE_WARNING | Daily: position idle > 150 days |
-| POSITION_COLLAPSED | Daily: position auto-collapsed at 180 days |
-| POSITION_APPROVED | MRF approved |
-| POSITION_REJECTED | MRF rejected |
-| POSITION_FILLED | Position marked as filled |
+| Role | Dashboard shows |
+|------|----------------|
+| HM | Status counts, pending approval resignations, approved resignations (with Hire/No Hire buttons), awaiting-action positions, on-hold positions, open positions |
+| HR_TA | Approved-not-yet-posted count, approvals-pending count, active pipeline summaries with stage breakdowns |
+| Admin | Total positions/users, positions by status, users by role, approaching-collapse list (≥150 days), seed database button |
 
-### 9.8. Background Jobs (Hangfire)
+### 8.7 Admin Panel
 
-All jobs run on **MongoDB-backed Hangfire** (no separate SQL Server needed).
-
-| Job | Schedule | Description |
-|-----|----------|-------------|
-| Approval Reminder | Daily (cron) | Notifies reviewers about MRFs pending > 48h |
-| Job Posting Reminder | Every 2 hours | Notifies about approved positions not yet posted |
-| Hold Expiry Check | Daily | Warns about positions on hold expiring within 3 days |
-| Position Collapse | Daily | Auto-collapses positions idle > 180 days (warnings at day 150/170) |
-
-**Dashboard:** View and manage jobs at **http://localhost:5000/hangfire** (open in dev; restrict in production).
-
-### 9.9. Dashboard
-
-Each role sees a tailored dashboard at `/`:
-
-**Hiring Manager:**
-- Open positions count, on-hold count, pending approval count
-- Action-required list (positions needing attention)
-- Recent positions list
-
-**HR / Talent Acquisition:**
-- Positions not yet posted (with post action)
-- Candidate pipeline overview
-- Pending approvals count
-
-**Admin:**
-- Positions grouped by status
-- Approaching collapse list (150+ day idle)
-- System overview
-
-### 9.10. Admin Panel
-
-Accessible only by **Admin** role. Pages:
-
-| Page | Route | Description |
-|------|-------|-------------|
-| Users | `/admin/users` | Create, edit, disable/enable user accounts |
-| MRF Templates | `/admin/templates` | CRUD for cost-centre MRF templates |
-| Cost Centres | `/admin/cost-centres` | CRUD for organisational cost centres |
-| DoA Settings | `/admin/doa` | Configure salary bands and approval thresholds |
-| All Positions | `/admin/positions` | View all positions across the system |
+Accessible via `/admin/*` routes (AdminOnly-gated). Pages:
+- **All Positions** — system-wide position table with status/cost-centre filters + reopen button for collapsed positions
+- **Resignations** — pending approval resignation table with Approve/Reject buttons
+- **Users** — create/edit/deactivate users, assign roles and cost centres
+- **MRF Templates** — cost-centre-specific templates that pre-fill MRF forms (name, job title, JD skeleton, skills, salary band)
+- **Cost Centres** — CRUD for organisational units
+- **DoA List** — delegation of authority entries (approver names, emails, titles)
 
 ---
 
-## 10. API Reference
-
-### Base URL
-- Dev: `http://localhost:5000/api`
-- Docker: `http://localhost/api` (proxied by Nginx)
-
-### Authentication
-All API endpoints require `Authorization: Bearer <auth0-jwt>` header.
-
-### 10.1. Auth
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/auth/me` | Get current synchronized user profile | JWT |
-
-### 10.2. Positions
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/positions` | Create position from template | HM, TA, Admin |
-| GET | `/api/positions` | List positions (filterable by status) | Any Role |
-| GET | `/api/positions/:id` | Get position detail | Any Role |
-| PUT | `/api/positions/:id` | Update draft position | HM, TA, Admin |
-| POST | `/api/positions/:id/submit` | Submit for approval | HM, TA, Admin |
-| POST | `/api/positions/:id/approve` | Approve MRF | TA, Admin |
-| POST | `/api/positions/:id/reject` | Reject MRF | TA, Admin |
-| POST | `/api/positions/:id/post` | Post to job board | TA, Admin |
-| POST | `/api/positions/:id/hold` | Place on hold | TA, Admin |
-| POST | `/api/positions/:id/release-hold` | Release from hold | TA, Admin |
-| POST | `/api/positions/:id/reopen` | Reopen rejected position | HM, TA, Admin |
-| POST | `/api/positions/:id/collapse` | Collapse position | Admin |
-| GET | `/api/positions/:id/audit` | Get audit log | Any Role |
-| PUT | `/api/positions/:id/reviewer-email` | Update reviewer email draft | TA, Admin |
-
-### 10.3. Candidates
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/candidates` | Add candidate to position | HM, TA |
-| GET | `/api/candidates/position/:positionId` | List candidates | Any Role |
-| GET | `/api/candidates/:id` | Get candidate detail | Any Role |
-| PUT | `/api/candidates/:id` | Update candidate info | HM, TA |
-| POST | `/api/candidates/:id/stage` | Move to new stage | HM, TA |
-| POST | `/api/candidates/:id/feedback` | Add interview feedback | HM, TA |
-| POST | `/api/candidates/:id/upload-cv` | Upload CV (multipart) | HM, TA |
-| DELETE | `/api/candidates/:id` | Remove candidate | TA, Admin |
-
-### 10.4. Notifications
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/notifications` | List notifications | Any Role |
-| GET | `/api/notifications/unread-count` | Get unread count | Any Role |
-| POST | `/api/notifications/:id/read` | Mark as read | Any Role |
-| POST | `/api/notifications/read-all` | Mark all as read | Any Role |
-
-### 10.5. Lookups
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/lookups/cost-centres` | All cost centres | Any Role |
-| GET | `/api/lookups/doa` | Delegation of Authority entries | Any Role |
-
-### 10.6. MRF Templates (Admin)
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/mrf-templates` | List all templates | Admin |
-| POST | `/api/mrf-templates` | Create template | Admin |
-| PUT | `/api/mrf-templates/:id` | Update template | Admin |
-| DELETE | `/api/mrf-templates/:id` | Delete template | Admin |
-
-### 10.7. Users (Admin)
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/users` | List all users | Admin |
-| POST | `/api/users` | Create user | Admin |
-| PUT | `/api/users/:id` | Update user | Admin |
-| DELETE | `/api/users/:id` | Delete user | Admin |
-
-### 10.8. Dashboard
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/dashboard/hm` | HM dashboard data | HM |
-| GET | `/api/dashboard/ta` | TA dashboard data | TA |
-| GET | `/api/dashboard/admin` | Admin dashboard data | Admin |
-
-### 10.9. Admin
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/admin/seed` | Trigger seed data | Admin |
-
-### 10.10. Response Format
-
-All API responses use a standard envelope:
-
-```json
-{
-  "success": true,
-  "data": { ... },
-  "error": null
-}
-```
-
-Error responses:
-
-```json
-{
-  "success": false,
-  "data": null,
-  "error": "Position not found"
-}
-```
-
----
-
-## 11. Project Structure
+## 9. Project Structure
 
 ```
-HRMS NDBS/
-├── docker-compose.yml              # Docker orchestration (Mongo + API + Nginx)
-├── nginx.conf                       # Nginx config for SPA + API proxy
-├── 01_PRD.md                        # Product Requirements Document
-├── 02_ARCHITECTURE.md               # Architecture specification
-├── 03_USER_STORIES.md               # User stories
-├── 04_AI_BUILD_PROMPT.md            # AI build prompt
-├── 05_FLOWS_AND_STATE_MACHINES.md   # State machine specs
-├── 06_SETUP_AND_SEED.md             # Setup & seed specification
-│
-├── client/                          # React Frontend
-│   ├── package.json
-│   ├── vite.config.ts               # Vite config with API proxy
-│   ├── tsconfig.json
+hrms/
+├── client/                          # React + TypeScript frontend
+│   ├── src/
+│   │   ├── api/                     # API client + endpoint functions
+│   │   │   ├── client.ts            # Fetch wrapper, auth token injection
+│   │   │   ├── candidates.ts        # Candidate CRUD + stage transitions
+│   │   │   ├── costCentres.ts
+│   │   │   ├── dashboard.ts         # Role-specific dashboard data
+│   │   │   ├── doa.ts              # Delegation of Authority
+│   │   │   ├── notifications.ts
+│   │   │   ├── positions.ts         # MRF CRUD + approval/posting actions
+│   │   │   ├── resignations.ts      # Log/approve/decide resignation
+│   │   │   ├── templates.ts        # MRF templates by cost centre
+│   │   │   └── users.ts
+│   │   ├── components/
+│   │   │   ├── ui.tsx               # Shared primitives (Button, Card, Input, Modal, etc.)
+│   │   │   ├── Layout.tsx           # Sidebar + header + notification bell
+│   │   │   ├── AuditTrail.tsx
+│   │   │   ├── PositionCard.tsx
+│   │   │   ├── RequireRole.tsx      # Route guard by role
+│   │   │   ├── StatusBadge.tsx
+│   │   │   ├── TagInput.tsx
+│   │   │   └── ToastContainer.tsx
+│   │   ├── hooks/                   # React Query hooks
+│   │   │   ├── useCostCentres.ts
+│   │   │   ├── useCurrentUser.ts    # Fetches + caches current user profile
+│   │   │   ├── usePositions.ts      # Position queries + mutations
+│   │   │   └── useTemplates.ts
+│   │   ├── pages/
+│   │   │   ├── DashboardPage.tsx    # HM/TA/Admin dashboards
+│   │   │   ├── RaiseListPage.tsx    # HM's list + type-choice modal
+│   │   │   ├── RaiseFormPage.tsx    # MRF multi-section form
+│   │   │   ├── PositionsPage.tsx    # All-positions table with filters
+│   │   │   ├── PositionDetailPage.tsx # Full MRF detail + actions
+│   │   │   ├── ApprovalsPage.tsx    # Pending-approval queue
+│   │   │   ├── CandidatesPage.tsx   # Kanban board + candidate detail drawer
+│   │   │   ├── CandidateDetailPage.tsx # Full candidate detail page
+│   │   │   ├── NotificationsPage.tsx
+│   │   │   ├── NotAuthorizedPage.tsx # 403 catch-all
+│   │   │   └── admin/               # Admin panel pages
+│   │   │       ├── AdminPositionsPage.tsx
+│   │   │       ├── AdminResignationsPage.tsx
+│   │   │       ├── AdminUsersPage.tsx
+│   │   │       ├── AdminTemplatesPage.tsx
+│   │   │       ├── AdminCostCentresPage.tsx
+│   │   │       └── AdminDoaPage.tsx
+│   │   ├── store/
+│   │   │   ├── authStore.ts         # Zustand — current user
+│   │   │   └── toastStore.ts        # Zustand — toast notifications
+│   │   ├── types/models.ts          # TypeScript interfaces mirroring backend models
+│   │   ├── utils/constants.ts       # Status/role metadata, formatters, normalizeRole
+│   │   ├── App.tsx                  # Routes + AuthGate + QueryClientProvider
+│   │   ├── main.tsx                 # Entry point, Auth0Provider, toast override
+│   │   └── index.css                # Tailwind directives + custom animations
+│   ├── index.html
 │   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── .env.example
-│   └── src/
-│       ├── main.tsx                 # Entry point (QueryClient + Toaster)
-│       ├── App.tsx                  # Routes + auth guard
-│       ├── index.css                # Tailwind directives
-│       ├── api/
-│       │   ├── client.ts            # Axios + JWT interceptor
-│       │   └── hooks.ts             # React Query hooks
-│       ├── store/
-│       │   └── authStore.ts         # Zustand auth state
-│       ├── types/
-│       │   └── index.ts            # All TypeScript types
-│       ├── utils/
-│       │   └── constants.ts         # Status maps, formatters
-│       ├── components/
-│       │   ├── ui.tsx               # Button, Card, Input, Modal, etc.
-│       │   ├── StatusBadge.tsx      # Position & stage badges
-│       │   ├── AuditTimeline.tsx    # Vertical timeline component
-│       │   └── NotificationPanel.tsx # Bell dropdown
-│       ├── layouts/
-│       │   └── AppLayout.tsx        # Sidebar + header layout
-│       └── features/
-│           ├── auth/LoginPage.tsx
-│           ├── dashboard/DashboardPage.tsx
-│           ├── mrf/MRFForm.tsx
-│           ├── positions/
-│           │   ├── RaisePositionPage.tsx
-│           │   ├── PositionsListPage.tsx
-│           │   ├── PositionDetailPage.tsx
-│           │   └── PositionEditPage.tsx
-│           ├── ats/
-│           │   ├── CandidatePipelinePage.tsx
-│           │   └── CandidateDetailPage.tsx
-│           ├── notifications/NotificationsPage.tsx
-│           └── admin/AdminPages.tsx
-│
-└── server/
-    └── HRMS.API/                    # .NET 9 Backend
-        ├── HRMS.API.csproj
-        ├── Dockerfile
-        ├── Program.cs               # DI, auth, middleware, pipeline
-        ├── appsettings.json         # Base config
-        ├── appsettings.Development.json
-        ├── appsettings.Production.json
-        ├── Configuration/
-        │   └── AppSettings.cs       # AuthSettings, HrmsClaims constants
-        ├── Models/
-        │   ├── User.cs
-        │   ├── Position.cs          # Position + Status enum + OnHoldInfo
-        │   ├── Candidate.cs         # Candidate + Stage enum + Feedback
-        │   └── Misc.cs              # MrfTemplate, CostCentre, DoA, Notification
-        ├── DTOs/
-        │   └── Dtos.cs              # Request/Response DTOs
-        ├── Common/
-        │   └── ApiResult.cs         # Standard response envelope
-        ├── Repositories/
-        │   ├── MongoDbContext.cs     # 7 collections + indexes
-        │   └── Repositories.cs       # All 7 repo interfaces + impls
-        ├── Services/
-        │   ├── AuthService.cs        # Local JWT + Auth0-ready
-        │   ├── PositionService.cs    # Full state machine
-        │   ├── CandidateService.cs   # Pipeline + auto-fill
-        │   ├── DashboardService.cs   # Role-gated aggregations
-        │   ├── NotificationService.cs # In-app + mock email
-        │   ├── SeedService.cs        # Idempotent data seed
-        │   ├── FileStorageService.cs # Local filesystem
-        │   └── CurrentUserService.cs  # Extract user from JWT
-        ├── Jobs/
-        │   └── BackgroundJobs.cs     # 4 Hangfire recurring jobs
-        ├── Middleware/
-        │   └── ErrorHandlingMiddleware.cs
-        └── Controllers/
-            ├── AuthController.cs
-            ├── PositionsController.cs
-            ├── CandidatesController.cs
-            ├── NotificationsController.cs
-            ├── DashboardController.cs
-            ├── LookupsController.cs
-            ├── MrfTemplatesController.cs
-            ├── UsersController.cs
-            └── AdminController.cs
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+└── server/HRMS.API/
+    ├── Controllers/                 # REST endpoints (12 controllers)
+    ├── Models/                      # MongoDB document models (8 models)
+    ├── Services/                    # Business logic (PositionService, NotificationService, CandidateService, MongoDbService)
+    ├── Repositories/                # Data access (MongoRepository base + typed repos)
+    ├── DTOs/                        # Request/response data transfer objects
+    ├── Middleware/                   # ClaimsTransformation, GlobalExceptionHandler
+    ├── Validators/                  # FluentValidation request validators
+    ├── Jobs/                        # Hangfire background jobs
+    ├── Program.cs                   # App startup, DI, middleware, auth policies, Hangfire config
+    ├── appsettings.json
+    └── HRMS.API.csproj
 ```
-
----
-
-## 12. Troubleshooting
-
-### API won't start — MongoDB connection refused
-**Cause:** MongoDB not running or wrong connection string.  
-**Fix:** Ensure MongoDB is accessible at the configured `ConnectionString`. In Docker, verify the `mongo` container is healthy: `docker compose ps`.
-
-### Login fails with 401
-**Cause:** Incorrect credentials or seed data not loaded.  
-**Fix:** Check API logs for seed errors. Re-trigger seed: `POST /api/admin/seed`.
-
-### Frontend shows blank page or 404 on refresh
-**Cause:** SPA routing not configured.  
-**Fix:** In Docker, nginx.conf handles this with `try_files`. In local dev, Vite handles it automatically. If using a custom web server, configure it to serve `index.html` for all non-file routes.
-
-### CORS errors in browser
-**Cause:** Frontend origin not in CORS whitelist.  
-**Fix:** Add your frontend URL to `Cors.Origin` in appsettings (comma-separated for multiple).
-
-### "Token expired" immediately after login
-**Cause:** Clock skew between client and server.  
-**Fix:** Ensure system clocks are synchronized, or increase `AccessTokenMinutes`.
-
-### Hangfire dashboard shows no jobs
-**Cause:** Hangfire DB not connected or recurring jobs failed to register.  
-**Fix:** Check `Hangfire.MongoConnectionString` config. Jobs register on startup — check API logs for errors.
-
-### Docker build fails — "sdk not found"
-**Cause:** Docker image not pulled.  
-**Fix:** `docker compose pull` or ensure Docker can access `mcr.microsoft.com/dotnet/sdk:9.0`.
-
-### npm install errors
-**Cause:** Corrupted node_modules.  
-**Fix:** `rm -rf node_modules package-lock.json && npm install`.
-
----
-
-## 13. Future Enhancements
-
-| Feature | Notes |
-|---------|-------|
-| **Auth0 integration** | Config switch already built — set `Auth:Mode=Auth0` and fill domain/audience |
-| **Email notifications** | Swap `Notification.EmailProvider` from `mock` to `smtp` and implement `IEmailService` |
-| **Azure Blob Storage** | Set `FileStorage.Type=azure-blob` and implement `AzureBlobStorageService` |
-| **Role-based Hangfire dashboard** | Add `IDashboardAuthorizationFilter` to restrict access |
-| **Reporting & Analytics** | Export position fill times, pipeline conversion rates |
-| **Multi-language support** | i18n framework for the frontend |
-| **Audit trail UI** | Dedicated admin page for full audit history |
-| **Resume parsing** | AI-powered CV data extraction |
-| **Calendar integration** | Interview scheduling with calendar invites |
-| **Mobile responsive improvements** | Optimize kanban and tables for smaller screens |
