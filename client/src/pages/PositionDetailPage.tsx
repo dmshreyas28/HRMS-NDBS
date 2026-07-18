@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "../components/Layout";
 import {
@@ -27,6 +27,7 @@ export function PositionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
 
   // Modals / Inputs
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -199,6 +200,13 @@ export function PositionDetailPage() {
                 {isTA && pos.status === 'APPROVED' && (
                   <Button variant="primary" onClick={() => postMutation.mutate()} disabled={postMutation.isPending}>
                     {postMutation.isPending ? "Posting..." : "📣 Mark as Posted"}
+                  </Button>
+                )}
+
+                {/* Owner: Revise rejected position */}
+                {isOwner && pos.status === 'REJECTED' && (
+                  <Button variant="primary" onClick={() => navigate(`/raise/${pos.id}`)}>
+                    Revise & Resubmit
                   </Button>
                 )}
 

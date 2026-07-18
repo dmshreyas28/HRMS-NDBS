@@ -238,7 +238,7 @@ export function RaiseFormPage() {
     );
   }
 
-  const isDraft = position.status === "DRAFT";
+  const isDraft = position.status === "DRAFT" || position.status === "REJECTED";
 
   return (
     <Layout>

@@ -161,8 +161,23 @@ namespace HRMS.API.Services
         public async Task<Position> UpdatePositionAsync(string id, UpdatePositionRequest request, string actorUserId)
         {
             var position = await GetByIdAsync(id);
-            if (position.Status != PositionStatus.DRAFT)
-                throw new InvalidOperationException("Only draft positions can be edited.");
+            if (position.Status != PositionStatus.DRAFT && position.Status != PositionStatus.REJECTED)
+                throw new InvalidOperationException("Only draft or rejected positions can be edited.");
+
+            if (position.Status == PositionStatus.REJECTED)
+            {
+                var oldStatus = position.Status;
+                position.Status = PositionStatus.DRAFT;
+                position.AuditLog.Add(new AuditLogEntry
+                {
+                    Action = "Revise",
+                    ActorId = actorUserId,
+                    Timestamp = DateTime.UtcNow,
+                    FromStatus = oldStatus.ToString(),
+                    ToStatus = position.Status.ToString(),
+                    Notes = "Position revised after rejection."
+                });
+            }
 
             position.CostCentre = request.CostCentre;
             position.Division = request.Division;
