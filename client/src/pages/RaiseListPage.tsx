@@ -47,8 +47,13 @@ export function RaiseListPage() {
     }
   };
 
-  const handleRaiseSubmit = () => {
-    if (positionType === "REPLACEMENT" && !selectedResignationId) {
+  const handleRaiseSubmit = (overrideResignationId?: string) => {
+    const effectiveId = overrideResignationId ?? selectedResignationId;
+    const effectiveResignation = overrideResignationId
+      ? approvedResignations.find((r) => r.id === overrideResignationId)
+      : selectedResignation;
+
+    if (positionType === "REPLACEMENT" && !effectiveId) {
       alert("Please select an approved resignation to proceed.");
       return;
     }
@@ -59,21 +64,21 @@ export function RaiseListPage() {
     let jobTitle = "";
     let resignationId: string | undefined = undefined;
 
-    if (positionType === "REPLACEMENT" && selectedResignation) {
-      costCentre = selectedResignation.costCentreId || selectedResignation.bu || costCentre;
-      division = selectedResignation.department || division;
-      jobTitle = selectedResignation.jobTitle || `Replacement for ${selectedResignation.employeeName}`;
-      resignationId = selectedResignation.id;
+    if (positionType === "REPLACEMENT" && effectiveResignation) {
+      costCentre = effectiveResignation.costCentreId || effectiveResignation.bu || costCentre;
+      division = effectiveResignation.department || division;
+      jobTitle = effectiveResignation.jobTitle || `Replacement for ${effectiveResignation.employeeName}`;
+      resignationId = effectiveResignation.id;
       replacementDetails = {
-        exEmployeeId: selectedResignation.employeeId,
-        exEmployeeName: selectedResignation.employeeName,
-        exEmployeeEmail: selectedResignation.employeeEmail,
-        exEmployeePhone: selectedResignation.employeePhone,
-        bu: selectedResignation.bu,
-        department: selectedResignation.department,
-        lastSalary: selectedResignation.lastSalary,
-        reasonForLeaving: selectedResignation.reasonForLeaving || "Resigned",
-        colourCode: selectedResignation.colourCode || "GREEN",
+        exEmployeeId: effectiveResignation.employeeId,
+        exEmployeeName: effectiveResignation.employeeName,
+        exEmployeeEmail: effectiveResignation.employeeEmail,
+        exEmployeePhone: effectiveResignation.employeePhone,
+        bu: effectiveResignation.bu,
+        department: effectiveResignation.department,
+        lastSalary: effectiveResignation.lastSalary,
+        reasonForLeaving: effectiveResignation.reasonForLeaving || "Resigned",
+        colourCode: effectiveResignation.colourCode || "GREEN",
       };
     }
 
@@ -86,7 +91,7 @@ export function RaiseListPage() {
       reportingManager: "",
       jd: "",
       requiredSkills: [] as string[],
-      salaryRange: { min: 0, max: selectedResignation?.lastSalary || 0, currency: "INR" },
+      salaryRange: { min: 0, max: effectiveResignation?.lastSalary || 0, currency: "INR" },
       requiredStartDate: new Date().toISOString(),
       shiftTime: "",
       shiftDays: [] as string[],
@@ -231,7 +236,7 @@ export function RaiseListPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedResignationId(r.id);
-                              handleRaiseSubmit();
+                              handleRaiseSubmit(r.id);
                             }}
                           >
                             Hire

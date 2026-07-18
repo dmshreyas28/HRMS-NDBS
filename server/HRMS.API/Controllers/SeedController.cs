@@ -11,24 +11,27 @@ namespace HRMS.API.Controllers
 {
     [ApiController]
     [Route("api/admin/[controller]")]
-    [AllowAnonymous]
     public class SeedController : ControllerBase
     {
         private readonly CostCentreRepository _costCentreRepo;
         private readonly MrfTemplateRepository _mrfTemplateRepo;
         private readonly DoAEntryRepository _doaRepo;
+        private readonly NotificationRepository _notificationRepo;
 
         public SeedController(
             CostCentreRepository costCentreRepo,
             MrfTemplateRepository mrfTemplateRepo,
-            DoAEntryRepository doaRepo)
+            DoAEntryRepository doaRepo,
+            NotificationRepository notificationRepo)
         {
             _costCentreRepo = costCentreRepo;
             _mrfTemplateRepo = mrfTemplateRepo;
             _doaRepo = doaRepo;
+            _notificationRepo = notificationRepo;
         }
 
         [HttpPost]
+        [AllowAnonymous]
         public async Task<IActionResult> SeedDatabase()
         {
             try
@@ -198,6 +201,28 @@ namespace HRMS.API.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, ApiResponse<string>.Fail($"Seeding failed: {ex.Message}"));
+            }
+        }
+
+        [HttpPost("cleanup-notifications")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> CleanupNotifications()
+        {
+            try
+            {
+                var bad = await _notificationRepo.FindAsync(n => n.PositionId == "");
+                var count = 0;
+                foreach (var n in bad)
+                {
+                    n.PositionId = null;
+                    await _notificationRepo.UpdateAsync(n.Id!, n);
+                    count++;
+                }
+                return Ok(ApiResponse<string>.Ok($"Cleaned up {count} notification(s) with empty positionId."));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<string>.Fail($"Cleanup failed: {ex.Message}"));
             }
         }
     }

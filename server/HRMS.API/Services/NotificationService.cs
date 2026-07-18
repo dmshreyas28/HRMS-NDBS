@@ -57,11 +57,13 @@ namespace HRMS.API.Services
 
         private async Task SendIndividualNotificationAsync(string recipientId, NotificationType type, string? positionId, string message, NotificationChannel channel)
         {
+            var normalizedPositionId = string.IsNullOrEmpty(positionId) ? null : positionId;
+
             var notification = new Notification
             {
                 RecipientId = recipientId,
                 Type = type,
-                PositionId = positionId,
+                PositionId = normalizedPositionId,
                 Message = message,
                 Channel = channel,
                 IsRead = false,
