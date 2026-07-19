@@ -23,10 +23,6 @@ export function listResignations(status?: string): Promise<Resignation[]> {
   return api.get<Resignation[]>(`/api/resignations${qs}`);
 }
 
-export function getResignation(id: string): Promise<Resignation> {
-  return api.get<Resignation>(`/api/resignations/${id}`);
-}
-
 export function listPendingApprovals(): Promise<Resignation[]> {
   return api.get<Resignation[]>("/api/resignations/pending-approvals");
 }

@@ -6,15 +6,7 @@ using HRMS.API.Repositories;
 
 namespace HRMS.API.Services
 {
-    public interface INotificationService
-    {
-        Task SendNotificationAsync(string recipientId, NotificationType type, string? positionId, string message, NotificationChannel channel = NotificationChannel.IN_APP);
-        Task<List<Notification>> GetUserNotificationsAsync(string userId);
-        Task MarkAsReadAsync(string notificationId, string userId);
-        Task MarkAllAsReadAsync(string userId);
-    }
-
-    public class NotificationService : INotificationService
+    public class NotificationService
     {
         private readonly NotificationRepository _notificationRepo;
         private readonly IUserRepository _userRepo;

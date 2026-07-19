@@ -1,7 +1,7 @@
 import { api } from "./client";
 import type { Position } from "../types/models";
 
-export interface HmDashboardData {
+interface HmDashboardData {
   counts: {
     draft: number;
     pending: number;
@@ -16,7 +16,7 @@ export interface HmDashboardData {
   openPositions: Position[];
 }
 
-export interface TaDashboardData {
+interface TaDashboardData {
   notYetPosted: Position[];
   pendingApprovals: Position[];
   pipelineSummaries: Array<{
@@ -27,7 +27,7 @@ export interface TaDashboardData {
   }>;
 }
 
-export interface AdminDashboardData {
+interface AdminDashboardData {
   totalPositions: number;
   totalUsers: number;
   approachingCollapse: Array<{

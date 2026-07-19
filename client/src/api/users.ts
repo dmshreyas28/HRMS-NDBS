@@ -5,10 +5,6 @@ export function listUsers(): Promise<AppUser[]> {
   return api.get<AppUser[]>("/api/users");
 }
 
-export function getUser(id: string): Promise<AppUser> {
-  return api.get<AppUser>(`/api/users/${id}`);
-}
-
 export function createUser(user: Omit<AppUser, "id">): Promise<AppUser> {
   return api.post<AppUser>("/api/users", user);
 }

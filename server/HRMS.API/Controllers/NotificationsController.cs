@@ -14,10 +14,10 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class NotificationsController : BaseController
     {
-        private readonly INotificationService _notificationService;
+        private readonly NotificationService _notificationService;
         private readonly IUserRepository _userRepo;
 
-        public NotificationsController(INotificationService notificationService, IUserRepository userRepo)
+        public NotificationsController(NotificationService notificationService, IUserRepository userRepo)
         {
             _notificationService = notificationService;
             _userRepo = userRepo;

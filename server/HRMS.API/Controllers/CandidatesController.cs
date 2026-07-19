@@ -18,10 +18,10 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class CandidatesController : BaseController
     {
-        private readonly ICandidateService _candidateService;
+        private readonly CandidateService _candidateService;
         private readonly IUserRepository _userRepo;
 
-        public CandidatesController(ICandidateService candidateService, IUserRepository userRepo)
+        public CandidatesController(CandidateService candidateService, IUserRepository userRepo)
         {
             _candidateService = candidateService;
             _userRepo = userRepo;

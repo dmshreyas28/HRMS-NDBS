@@ -10,12 +10,12 @@ namespace HRMS.API.Jobs
     public class HangfireJobs
     {
         private readonly IPositionRepository _positionRepo;
-        private readonly INotificationService _notificationService;
+        private readonly NotificationService _notificationService;
         private readonly NotificationRepository _notificationRepo;
 
         public HangfireJobs(
             IPositionRepository positionRepo,
-            INotificationService notificationService,
+            NotificationService notificationService,
             NotificationRepository notificationRepo)
         {
             _positionRepo = positionRepo;

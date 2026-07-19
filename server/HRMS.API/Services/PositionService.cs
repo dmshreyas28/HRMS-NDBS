@@ -8,36 +8,17 @@ using HRMS.API.Repositories;
 
 namespace HRMS.API.Services
 {
-    public interface IPositionService
-    {
-        Task<Position> GetByIdAsync(string id);
-        Task<List<Position>> GetAllAsync(string userId, UserRole role, PositionStatus? statusFilter = null);
-        Task<Position> CreatePositionAsync(CreatePositionRequest request, string raisedByUserId);
-        Task<Position> UpdatePositionAsync(string id, UpdatePositionRequest request, string actorUserId);
-        Task<Position> SubmitForApprovalAsync(string id, SubmitPositionRequest request, string actorUserId);
-        Task<Position> ApprovePositionAsync(string id, string notes, string actorUserId);
-        Task<Position> RejectPositionAsync(string id, string reason, string actorUserId);
-        Task<Position> PlaceOnHoldAsync(string id, int durationDays, string actorUserId);
-        Task<Position> ReleaseHoldAsync(string id, string actorUserId);
-        Task<Position> PostJobAsync(string id, string actorUserId);
-        Task<Position> ReopenPositionAsync(string id, string actorUserId);
-        Task<Position> AutoClosePositionAsync(string id, string actorUserId);
-        Task UpdateReviewerEmailDraftAsync(string id, string draft, string actorUserId);
-        Task SendReviewerEmailAsync(string id, string actorUserId);
-        Task DeletePositionAsync(string id, string actorUserId);
-    }
-
-    public class PositionService : IPositionService
+    public class PositionService
     {
         private readonly IPositionRepository _positionRepo;
         private readonly IUserRepository _userRepo;
-        private readonly INotificationService _notificationService;
+        private readonly NotificationService _notificationService;
         private readonly ResignationRepository _resignationRepo;
 
         public PositionService(
             IPositionRepository positionRepo,
             IUserRepository userRepo,
-            INotificationService notificationService,
+            NotificationService notificationService,
             ResignationRepository resignationRepo)
         {
             _positionRepo = positionRepo;

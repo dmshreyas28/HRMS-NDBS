@@ -41,9 +41,9 @@ namespace HRMS.API.Controllers
     {
         private readonly ResignationRepository _resignationRepo;
         private readonly IUserRepository _userRepo;
-        private readonly INotificationService _notificationService;
+        private readonly NotificationService _notificationService;
 
-        public ResignationsController(ResignationRepository resignationRepo, IUserRepository userRepo, INotificationService notificationService)
+        public ResignationsController(ResignationRepository resignationRepo, IUserRepository userRepo, NotificationService notificationService)
         {
             _resignationRepo = resignationRepo;
             _userRepo = userRepo;

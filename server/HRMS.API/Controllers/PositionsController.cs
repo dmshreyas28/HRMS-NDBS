@@ -16,10 +16,10 @@ namespace HRMS.API.Controllers
     [Authorize]
     public class PositionsController : BaseController
     {
-        private readonly IPositionService _positionService;
+        private readonly PositionService _positionService;
         private readonly IUserRepository _userRepo;
 
-        public PositionsController(IPositionService positionService, IUserRepository userRepo)
+        public PositionsController(PositionService positionService, IUserRepository userRepo)
         {
             _positionService = positionService;
             _userRepo = userRepo;

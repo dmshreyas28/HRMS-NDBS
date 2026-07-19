@@ -41,9 +41,9 @@ builder.Services.AddScoped<DoAEntryRepository>();
 builder.Services.AddScoped<ResignationRepository>();
 
 // Register Services
-builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<IPositionService, PositionService>();
-builder.Services.AddScoped<ICandidateService, CandidateService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<PositionService>();
+builder.Services.AddScoped<CandidateService>();
 
 // Register Hangfire
 var mongoUrlBuilder = new MongoUrlBuilder(builder.Configuration.GetConnectionString("MongoDb"));

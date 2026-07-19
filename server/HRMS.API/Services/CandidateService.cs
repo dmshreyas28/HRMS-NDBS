@@ -7,27 +7,14 @@ using HRMS.API.Repositories;
 
 namespace HRMS.API.Services
 {
-    public interface ICandidateService
-    {
-        Task<Candidate> GetByIdAsync(string id);
-        Task<List<Candidate>> GetCandidatesByPositionIdAsync(string positionId);
-        Task<Candidate> CreateCandidateAsync(string positionId, CreateCandidateRequest request);
-        Task<Candidate> UpdateCandidateAsync(string id, UpdateCandidateRequest request);
-        Task<Candidate> TransitionStageAsync(string id, UpdateCandidateStageRequest request, string actorUserId);
-        Task<Candidate> AddFeedbackAsync(string id, AddFeedbackRequest request);
-        Task<Candidate> SetOfferAsync(string id, SetOfferRequest request);
-        Task<Candidate> UpdateCvUrlAsync(string id, string cvUrl);
-        Task DeleteCandidateAsync(string id);
-    }
-
-    public class CandidateService : ICandidateService
+    public class CandidateService
     {
         private readonly ICandidateRepository _candidateRepo;
-        private readonly IPositionService _positionService;
+        private readonly PositionService _positionService;
 
         public CandidateService(
             ICandidateRepository candidateRepo,
-            IPositionService positionService)
+            PositionService positionService)
         {
             _candidateRepo = candidateRepo;
             _positionService = positionService;
