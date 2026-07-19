@@ -26,7 +26,6 @@ namespace HRMS.API.Repositories
         Task UpdateAsync(string id, User entity);
         Task DeleteAsync(string id);
         Task<long> CountAsync();
-        Task<long> CountAsync(Expression<Func<User, bool>> filterExpression);
         Task<User?> GetByAuth0IdAsync(string auth0Id);
         Task<System.Collections.Generic.Dictionary<string, int>> GetUsersRoleBreakdownAsync();
     }
@@ -70,7 +69,6 @@ namespace HRMS.API.Repositories
         Task UpdateAsync(string id, Position entity);
         Task DeleteAsync(string id);
         Task<long> CountAsync();
-        Task<long> CountAsync(Expression<Func<Position, bool>> filterExpression);
         Task<System.Collections.Generic.Dictionary<string, int>> GetStatusBreakdownAsync();
         Task<System.Collections.Generic.Dictionary<string, int>> GetHmStatusBreakdownAsync(string hmUserId);
     }
@@ -127,7 +125,6 @@ namespace HRMS.API.Repositories
         Task UpdateAsync(string id, Candidate entity);
         Task DeleteAsync(string id);
         Task<long> CountAsync();
-        Task<long> CountAsync(Expression<Func<Candidate, bool>> filterExpression);
         Task<System.Collections.Generic.List<CandidateStageCount>> GetStageCountsGroupedByPositionAsync();
     }
 

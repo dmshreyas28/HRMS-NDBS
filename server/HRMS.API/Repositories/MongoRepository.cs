@@ -54,9 +54,5 @@ namespace HRMS.API.Repositories
             return await _collection.CountDocumentsAsync(_ => true);
         }
 
-        public virtual async Task<long> CountAsync(Expression<Func<T, bool>> filterExpression)
-        {
-            return await _collection.CountDocumentsAsync(filterExpression);
-        }
     }
 }
